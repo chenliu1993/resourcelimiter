@@ -41,6 +41,7 @@ rules:
   resources:
   - resourcelimiters/finalizers
   verbs:
+  - delete
   - update
 - apiGroups:
   - resources.resourcelimiter.io

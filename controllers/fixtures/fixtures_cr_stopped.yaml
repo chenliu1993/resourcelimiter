@@ -1,9 +1,8 @@
 apiVersion: resources.resourcelimiter.io/v1beta1
 kind: ResourceLimiter
 metadata:
-  name: resourcelimiter-sample
+  name: resourcelimiter-sample-fixtures-stopped
 spec:
-  # TODO(user): Add fields here
   targets: 
   - default
   types:
@@ -11,4 +10,4 @@ spec:
     limits.memory: "1500Mi"
     requests.cpu: "1.2"
     requests.memory: "1200Mi"
-  applied: true
+  applied: false

@@ -33,13 +33,15 @@ type ResourceLimiterSpec struct {
 
 	Targets []ResourceLimiterNamespace     `json:"targets,omitempty"`
 	Types   map[ResourceLimiterType]string `json:"types,omitempty"`
-	Level   string                         `json:"level,omitempty"`
+	Applied bool                           `json:"applied,omitempty"`
 }
 
 // ResourceLimiterStatus defines the observed state of ResourceLimiter
 type ResourceLimiterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
+
+	State string `json:"state"`
 }
 
 //+kubebuilder:object:root=true
