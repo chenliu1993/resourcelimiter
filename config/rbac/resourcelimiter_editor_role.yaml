@@ -1,0 +1,24 @@
+# permissions for end users to edit resourcelimiters.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: resourcelimiter-editor-role
+rules:
+- apiGroups:
+  - resources.resourcelimiter.io
+  resources:
+  - resourcelimiters
+  verbs:
+  - create
+  - delete
+  - get
+  - list
+  - patch
+  - update
+  - watch
+- apiGroups:
+  - resources.resourcelimiter.io
+  resources:
+  - resourcelimiters/status
+  verbs:
+  - get

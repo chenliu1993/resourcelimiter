@@ -1,0 +1,15 @@
+domain: resourcelimiter.io
+layout:
+- go.kubebuilder.io/v3
+projectName: resourcelimiter
+repo: github.com/chenliu1993/resourcelimiter
+resources:
+- api:
+    crdVersion: v1
+  controller: true
+  domain: resourcelimiter.io
+  group: resources
+  kind: ResourceLimiter
+  path: github.com/chenliu1993/resourcelimiter/api/v1beta1
+  version: v1beta1
+version: "3"
