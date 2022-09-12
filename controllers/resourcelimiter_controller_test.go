@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"time"
 
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
 	"github.com/chenliu1993/resourcelimiter/pkg/constants"
@@ -18,6 +19,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
+const (
+	timeout  = 10 * time.Second
+	interval = 1 * time.Second
+)
+
 var _ = Describe("ResourceLimiter controller", func() {
 	pwd, err := os.Getwd()
 	Expect(err).NotTo(HaveOccurred())
@@ -28,7 +34,6 @@ var _ = Describe("ResourceLimiter controller", func() {
 		Expect(err).NotTo(HaveOccurred())
 		err = yaml.Unmarshal(content, rl)
 		Expect(err).NotTo(HaveOccurred())
-
 		It("Should create ResourceLimter CR and Quotas", func() {
 			By("By creating a new ResourceLimiter")
 			ctx := context.Background()
@@ -40,7 +45,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 					return "notknown"
 				}
 				return existingResourceLimiter1.Status.State
-			}).Should(Equal(constants.Ready))
+			}, timeout, interval).Should(Equal(constants.Ready))
 
 			By("By checking all the related quotas")
 			resourceQuota := &corev1.ResourceQuota{}
@@ -57,7 +62,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 						return false
 					}
 					return true
-				}).Should(Equal(true))
+				}, timeout, interval).Should(Equal(true))
 			}
 		})
 
@@ -69,13 +74,12 @@ var _ = Describe("ResourceLimiter controller", func() {
 			var existingResourceLimiter rlv1beta1.ResourceLimiter
 			Eventually(func() bool {
 				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rl), &existingResourceLimiter); err != nil {
-					fmt.Fprintf(GinkgoWriter, err.Error())
 					if apierrors.IsNotFound(err) {
 						return true
 					}
 				}
 				return false
-			}).Should(Equal(true))
+			}, timeout, interval).Should(Equal(true))
 
 			By("By checking all the related quotas non-exists")
 			resourceQuota := &corev1.ResourceQuota{}
@@ -93,20 +97,19 @@ var _ = Describe("ResourceLimiter controller", func() {
 						}
 					}
 					return false
-				}).Should(Equal(true))
+				}, timeout, interval).Should(Equal(true))
 			}
 		})
 	})
 
 	Context("ResourceLimiter LifeCycle 2", func() {
+		rl := &rlv1beta1.ResourceLimiter{}
+		content, err := ioutil.ReadFile(filepath.Join(pwd, "fixtures/fixtures_cr.yaml"))
+		Expect(err).NotTo(HaveOccurred())
+		err = yaml.Unmarshal(content, rl)
+		Expect(err).NotTo(HaveOccurred())
 		It("Should create ResourceLimter CR and Quotas", func() {
 			By("By creating a new ResourceLimiter")
-			rl := &rlv1beta1.ResourceLimiter{}
-			content, err := ioutil.ReadFile(filepath.Join(pwd, "fixtures/fixtures_cr.yaml"))
-			Expect(err).NotTo(HaveOccurred())
-			err = yaml.Unmarshal(content, rl)
-			Expect(err).NotTo(HaveOccurred())
-
 			ctx := context.Background()
 
 			Expect(k8sClient.Create(ctx, rl)).Should(Succeed())
@@ -116,7 +119,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 					return "notknown"
 				}
 				return existingResourceLimiter1.Status.State
-			}).Should(Equal(constants.Ready))
+			}, timeout, interval).Should(Equal(constants.Ready))
 
 			By("By checking all the related quotas")
 			resourceQuota := &corev1.ResourceQuota{}
@@ -129,25 +132,22 @@ var _ = Describe("ResourceLimiter controller", func() {
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, resourceQuota); err != nil {
-						// fmt.Fprintf(GinkgoWriter, "%v", err)
 						return false
 					}
 					return true
-				}).Should(Equal(true))
+				}, timeout, interval).Should(Equal(true))
 			}
 		})
 
 		It("Should stop ResourceLimter CR and delete Quotas", func() {
 			By("By stopping a ResourceLimiter")
-			rlstop := &rlv1beta1.ResourceLimiter{}
-			content, err := ioutil.ReadFile(filepath.Join(pwd, "fixtures/fixtures_cr_stopped.yaml"))
-
-			Expect(err).NotTo(HaveOccurred())
-			err = yaml.Unmarshal(content, rlstop)
-			Expect(err).NotTo(HaveOccurred())
-			Expect(k8sClient.Update(ctx, rlstop)).Should(Succeed())
-
+			existingrl := &rlv1beta1.ResourceLimiter{}
+			Expect(k8sClient.Get(ctx, client.ObjectKeyFromObject(rl), existingrl)).Should(Succeed())
+			rlstop := existingrl.DeepCopy()
+			rlstop.Spec.Applied = false
 			ctx := context.Background()
+
+			Expect(k8sClient.Update(ctx, rlstop)).Should(Succeed())
 
 			var existingResourceLimiter rlv1beta1.ResourceLimiter
 			Eventually(func() string {
@@ -155,7 +155,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 					return "notknown"
 				}
 				return existingResourceLimiter.Status.State
-			}).Should(Equal(constants.Stopped))
+			}, timeout, interval).Should(Equal(constants.Stopped))
 
 			By("By checking all the related quotas non-exists")
 			resourceQuota := &corev1.ResourceQuota{}
@@ -173,7 +173,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 						}
 					}
 					return false
-				}).Should(Equal(true))
+				}, timeout, interval).Should(Equal(true))
 			}
 		})
 	})
