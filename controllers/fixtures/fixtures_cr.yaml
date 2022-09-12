@@ -6,8 +6,8 @@ spec:
   targets: 
   - default
   types:
-    limits.cpu: "1.5"
-    limits.memory: "1500Mi"
-    requests.cpu: "1.2"
-    requests.memory: "1200Mi"
+    limits.cpu: "0.5"
+    limits.memory: "150Mi"
+    requests.cpu: "0.25"
+    requests.memory: "120Mi"
   applied: true
