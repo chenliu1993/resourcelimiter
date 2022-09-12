@@ -31,4 +31,6 @@ jobs:
    - name: Test
      run: make test
 
+   - name: Clean up Test Cluster
+     run: kind delete cluster
     
