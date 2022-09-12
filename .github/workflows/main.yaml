@@ -1,0 +1,25 @@
+name: Main
+
+on:     
+   schedule:
+    - cron: "0 12 * * *"
+
+env:
+  GO111MODULE: on
+
+jobs:
+  build:
+   runs-on: ubuntu-latest
+   steps:
+   - uses: actions/setup-go@v3
+     with:
+      go-version: '1.18'
+
+   - uses: actions/checkout@v3
+     name: Checkout Code
+
+   - name: Build 
+     run: make build
+
+   - name: Test
+     run: make test
