@@ -54,7 +54,7 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	rl := rlv1beta1.ResourceLimiter{}
 	if err := r.Get(ctx, req.NamespacedName, &rl); err != nil {
 		// return ctrl.Result{Requeue: true}, client.IgnoreNotFound(err)
-		return ctrl.Result{Requeue: true}, err
+		return ctrl.Result{}, err
 	}
 
 	// Add our finalizer if it does not exist
@@ -69,9 +69,6 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Under deletion
 	if !rl.ObjectMeta.DeletionTimestamp.IsZero() {
-		if err := r.updateStatus(ctx, &rl, constants.Terminating); err != nil {
-			return ctrl.Result{}, err
-		}
 		return r.reconcileDelete(ctx, &rl)
 	}
 
@@ -98,31 +95,34 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 		// reused
 		namespacedName k8stypes.NamespacedName
 	)
-	for idx, ns := range rl.Spec.Targets {
-		if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
-			continue
-		}
-		// Check if namespace exists
-		namespacedName = k8stypes.NamespacedName{Namespace: "", Name: string(ns)}
-		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
-			if apierrors.IsNotFound(err) {
-				log.WithName("ResourceLimiter").Info(fmt.Sprintf("namespace %s not found, continue deleting", string(ns)))
+
+	if rl.Status.State != constants.Stopped {
+		for idx, ns := range rl.Spec.Targets {
+			if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
 				continue
 			}
-			return ctrl.Result{}, err
-		}
+			// Check if namespace exists
+			namespacedName = k8stypes.NamespacedName{Namespace: "", Name: string(ns)}
+			if err := r.Get(ctx, namespacedName, &namespace); err != nil {
+				if apierrors.IsNotFound(err) {
+					log.WithName("ResourceLimiter").Info(fmt.Sprintf("namespace %s not found, continue deleting", string(ns)))
+					continue
+				}
+				return ctrl.Result{}, err
+			}
 
-		namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: fmt.Sprintf("rl-%s-%d", string(ns), idx)}
-		resourceQuota = corev1.ResourceQuota{}
-		if err := r.Get(ctx, namespacedName, &resourceQuota); err != nil {
-			return ctrl.Result{}, err
-		}
+			namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: fmt.Sprintf("rl-%s-%d", string(ns), idx)}
+			resourceQuota = corev1.ResourceQuota{}
+			if err := r.Get(ctx, namespacedName, &resourceQuota); err != nil {
+				return ctrl.Result{}, err
+			}
 
-		if err := r.Delete(ctx, &resourceQuota); err != nil {
-			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("unable to delete quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
-			return ctrl.Result{}, err
+			if err := r.Delete(ctx, &resourceQuota); err != nil {
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("unable to delete quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
+				return ctrl.Result{}, err
+			}
+			log.WithName("ResourceLimiter").Info(fmt.Sprintf("resource quota %s deleted", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 		}
-		log.WithName("ResourceLimiter").Info(fmt.Sprintf("resource quota %s deleted", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 	}
 
 	patch := client.MergeFrom(rl.DeepCopy())
@@ -131,6 +131,11 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 		log.WithName("ResourceLimiter").Error(err, "unable to register finalizer")
 		return ctrl.Result{}, err
 	}
+	// rlstop := rl.DeepCopy()
+	// controllerutil.RemoveFinalizer(rlstop, constants.DefaultFinalizer)
+	// if err := r.Update(ctx, rlstop); err != nil {
+	// 	return ctrl.Result{}, err
+	// }
 
 	return ctrl.Result{}, nil
 }
@@ -188,7 +193,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 					resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsMemory])
 					if er := r.Create(ctx, resourceQuota); er != nil {
 						log.WithName("ResourceLimiter").Error(er, fmt.Sprintf("create the quopta %s failed", resourceQuota.Name))
-						return ctrl.Result{Requeue: true}, er
+						return ctrl.Result{}, er
 					}
 					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s successfully", resourceQuota.Name))
 					if err := r.updateStatus(ctx, rl, constants.Ready); err != nil {
@@ -197,7 +202,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 					return ctrl.Result{}, nil
 				}
 				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get the quota %s failed", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
-				return ctrl.Result{Requeue: true}, err
+				return ctrl.Result{}, err
 			} else {
 				resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
 				resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsCpu])
@@ -205,7 +210,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 				resourceQuota.Spec.Hard[corev1.ResourceLimitsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsMemory])
 				resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsMemory])
 				if er := r.Update(ctx, resourceQuota); er != nil {
-					return ctrl.Result{Requeue: true}, er
+					return ctrl.Result{}, er
 				}
 				log.WithName("ResourceLimiter").Info(fmt.Sprintf("update resource quota %s successfully", resourceQuota.Name))
 				if err := r.updateStatus(ctx, rl, constants.Ready); err != nil {

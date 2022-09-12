@@ -24,7 +24,7 @@ const (
 )
 
 const (
-	Ready       = "ready"
-	Terminating = "terminating"
-	Stopped     = "stopped"
+	Ready = "ready"
+	// Terminating = "terminating"
+	Stopped = "stopped"
 )
