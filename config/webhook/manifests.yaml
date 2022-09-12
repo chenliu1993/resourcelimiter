@@ -1,0 +1,54 @@
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: mutating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /mutate-resources-resourcelimiter-io-v1beta1-resourcelimiter
+  failurePolicy: Fail
+  name: mresourcelimiter.kb.io
+  rules:
+  - apiGroups:
+    - resources.resourcelimiter.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - resourcelimiters
+  sideEffects: None
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: ValidatingWebhookConfiguration
+metadata:
+  creationTimestamp: null
+  name: validating-webhook-configuration
+webhooks:
+- admissionReviewVersions:
+  - v1
+  clientConfig:
+    service:
+      name: webhook-service
+      namespace: system
+      path: /validate-resources-resourcelimiter-io-v1beta1-resourcelimiter
+  failurePolicy: Fail
+  name: vresourcelimiter.kb.io
+  rules:
+  - apiGroups:
+    - resources.resourcelimiter.io
+    apiVersions:
+    - v1beta1
+    operations:
+    - CREATE
+    - UPDATE
+    resources:
+    - resourcelimiters
+  sideEffects: None

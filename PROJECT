@@ -12,4 +12,8 @@ resources:
   kind: ResourceLimiter
   path: github.com/chenliu1993/resourcelimiter/api/v1beta1
   version: v1beta1
+  webhooks:
+    defaulting: true
+    validation: true
+    webhookVersion: v1
 version: "3"
