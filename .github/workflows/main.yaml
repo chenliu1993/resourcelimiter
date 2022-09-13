@@ -16,7 +16,7 @@ jobs:
   #    with:
   #     go-version: '1.18'
    - name: Set up cluster
-     run: kind delete cluster; kind create cluster; sleep 40s;
+     run: kind delete cluster; kind create cluster --config /disk1/cliu/kind-config.yaml; sleep 60s;
 
    - uses: actions/checkout@v3
      name: Checkout Code
