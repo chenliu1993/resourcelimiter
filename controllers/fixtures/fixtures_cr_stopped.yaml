@@ -5,6 +5,8 @@ metadata:
 spec:
   targets: 
   - default
+  # for kind test
+  - local-path-storage
   types:
     limits.cpu: "1.5"
     limits.memory: "1500Mi"

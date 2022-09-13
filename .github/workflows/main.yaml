@@ -1,6 +1,9 @@
 name: Main
 
-on:     
+on:
+   push:
+    branches:
+      - main
    schedule:
     - cron: "0 12 * * *"
 
