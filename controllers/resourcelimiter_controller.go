@@ -58,11 +58,13 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	newrl := rl.DeepCopy()
+
 	// Add our finalizer if it does not exist
-	if !controllerutil.ContainsFinalizer(&rl, constants.DefaultFinalizer) {
-		patch := client.MergeFrom(rl.DeepCopy())
-		controllerutil.AddFinalizer(&rl, constants.DefaultFinalizer)
-		if err := r.Patch(ctx, &rl, patch); err != nil {
+	if !controllerutil.ContainsFinalizer(newrl, constants.DefaultFinalizer) {
+		patch := client.MergeFrom(newrl)
+		controllerutil.AddFinalizer(newrl, constants.DefaultFinalizer)
+		if err := r.Patch(ctx, newrl, patch); err != nil {
 			log.WithName("ResourceLimiter").Error(err, "unable to register finalizer")
 			return ctrl.Result{}, err
 		}
@@ -70,10 +72,10 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Under deletion
 	if !rl.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, &rl)
+		return r.reconcileDelete(ctx, newrl)
 	}
 
-	return r.reconcile(ctx, &rl)
+	return r.reconcile(ctx, newrl)
 }
 
 // SetupWithManager sets up the controller with the Manager.
