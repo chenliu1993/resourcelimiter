@@ -23,6 +23,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
@@ -159,6 +160,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		namespace      corev1.Namespace
 		namespacedName k8stypes.NamespacedName
 		resourceQuota  = &corev1.ResourceQuota{}
+		blockOnOwner   = true
 	)
 
 	for idx, ns := range rl.Spec.Targets {
@@ -186,6 +188,15 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 					resourceQuota.Name = fmt.Sprintf("rl-%s-%d", string(ns), idx)
 					resourceQuota.Namespace = string(ns)
+					resourceQuota.OwnerReferences = []metav1.OwnerReference{
+						{
+							UID:                rl.UID,
+							APIVersion:         constants.ResourceLimiterApiVersion,
+							Kind:               constants.ResourceLimiterKind,
+							Name:               rl.Name,
+							BlockOwnerDeletion: &blockOnOwner,
+						},
+					}
 					resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
 					resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsCpu])
 					resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsCpu])
