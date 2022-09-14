@@ -39,7 +39,7 @@ import (
 
 var (
 	// TODO: export this field to users
-	concurrentWorkers int = 2
+	concurrentWorkers int = 5
 )
 
 // ResourceLimiterReconciler reconciles a ResourceLimiter object
