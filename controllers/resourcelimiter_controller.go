@@ -23,8 +23,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
+	ctrlcontroller "sigs.k8s.io/controller-runtime/pkg/controller"
 	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
@@ -33,6 +35,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+)
+
+var (
+	// TODO: export this field to users
+	concurrentWorkers int = 1
 )
 
 // ResourceLimiterReconciler reconciles a ResourceLimiter object
@@ -57,11 +64,13 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 		return ctrl.Result{}, err
 	}
 
+	newrl := rl.DeepCopy()
+
 	// Add our finalizer if it does not exist
-	if !controllerutil.ContainsFinalizer(&rl, constants.DefaultFinalizer) {
-		patch := client.MergeFrom(rl.DeepCopy())
-		controllerutil.AddFinalizer(&rl, constants.DefaultFinalizer)
-		if err := r.Patch(ctx, &rl, patch); err != nil {
+	if !controllerutil.ContainsFinalizer(newrl, constants.DefaultFinalizer) {
+		patch := client.MergeFrom(newrl)
+		controllerutil.AddFinalizer(newrl, constants.DefaultFinalizer)
+		if err := r.Patch(ctx, newrl, patch); err != nil {
 			log.WithName("ResourceLimiter").Error(err, "unable to register finalizer")
 			return ctrl.Result{}, err
 		}
@@ -69,15 +78,16 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Under deletion
 	if !rl.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, &rl)
+		return r.reconcileDelete(ctx, newrl)
 	}
 
-	return r.reconcile(ctx, &rl)
+	return r.reconcile(ctx, newrl)
 }
 
 // SetupWithManager sets up the controller with the Manager.
 func (r *ResourceLimiterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
+		WithOptions(ctrlcontroller.Options{MaxConcurrentReconciles: concurrentWorkers}).
 		For(&rlv1beta1.ResourceLimiter{}).
 		Complete(r)
 }
@@ -159,6 +169,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		namespace      corev1.Namespace
 		namespacedName k8stypes.NamespacedName
 		resourceQuota  = &corev1.ResourceQuota{}
+		blockOnOwner   = true
 	)
 
 	for idx, ns := range rl.Spec.Targets {
@@ -186,6 +197,15 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 					resourceQuota.Name = fmt.Sprintf("rl-%s-%d", string(ns), idx)
 					resourceQuota.Namespace = string(ns)
+					resourceQuota.OwnerReferences = []metav1.OwnerReference{
+						{
+							UID:                rl.UID,
+							APIVersion:         constants.ResourceLimiterApiVersion,
+							Kind:               constants.ResourceLimiterKind,
+							Name:               rl.Name,
+							BlockOwnerDeletion: &blockOnOwner,
+						},
+					}
 					resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
 					resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsCpu])
 					resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsCpu])

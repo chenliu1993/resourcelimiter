@@ -28,3 +28,8 @@ const (
 	// Terminating = "terminating"
 	Stopped = "stopped"
 )
+
+const (
+	ResourceLimiterApiVersion = "resources.resourcelimiter.io/v1beta1"
+	ResourceLimiterKind       = "ResourceLimiter"
+)
