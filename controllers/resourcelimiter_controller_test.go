@@ -63,9 +63,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota := &corev1.ResourceQuota{}
 			namespacedName := types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -91,9 +91,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota = &corev1.ResourceQuota{}
 			namespacedName = types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -141,9 +141,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota := &corev1.ResourceQuota{}
 			namespacedName := types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -173,9 +173,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota = &corev1.ResourceQuota{}
 			namespacedName = types.NamespacedName{}
 			for idx, ns := range rlstop.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -259,9 +259,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
@@ -375,9 +375,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
@@ -458,9 +458,9 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-					continue
-				}
+				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
+				// 	continue
+				// }
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {

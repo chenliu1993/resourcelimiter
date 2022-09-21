@@ -108,9 +108,9 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 
 	if rl.Status.State != constants.Stopped {
 		for idx, ns := range rl.Spec.Targets {
-			if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
-				continue
-			}
+			// if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+			// 	continue
+			// }
 			// Check if namespace exists
 			namespacedName = k8stypes.NamespacedName{Namespace: "", Name: string(ns)}
 			if err := r.Get(ctx, namespacedName, &namespace); err != nil {
@@ -173,9 +173,9 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 	)
 
 	for idx, ns := range rl.Spec.Targets {
-		if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
-			continue
-		}
+		// if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+		// 	continue
+		// }
 		// Make sure namespace exists
 		namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: string(ns)}
 		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
