@@ -81,3 +81,10 @@ require (
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.1 // indirect
 	sigs.k8s.io/yaml v1.3.0 // indirect
 )
+
+replace (
+	github.com/emicklei/go-restful v2.9.5+incompatible => github.com/emicklei/go-restful v2.16.0
+	golang.org/x/crypto v0.0.0-20220214200702-86341886e292 => golang.org/x/crypto v0.0.0-20220314234659-1baeb1ce4c0b
+	golang.org/x/net v0.0.0-20220127200216-cd36cc0744dd => golang.org/x/net v0.0.0-20220906165146-f3363e06e74c
+	golang.org/x/sys v0.0.0-20220209214540-3681064d5158 => golang.org/x/sys v0.0.0-20220412211240-33da011f77ad
+)
