@@ -35,6 +35,8 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/event"
+	"sigs.k8s.io/controller-runtime/pkg/predicate"
 )
 
 var (
@@ -47,6 +49,15 @@ type ResourceLimiterReconciler struct {
 	client.Client
 	Log    logr.Logger
 	Scheme *runtime.Scheme
+}
+
+// Event filter
+func eventPredicate() predicate.Predicate {
+	return predicate.Funcs{
+		UpdateFunc: func(e event.UpdateEvent) bool {
+			return e.ObjectOld.GetGeneration() != e.ObjectNew.GetGeneration() || e.ObjectOld.GetResourceVersion() != e.ObjectNew.GetResourceVersion()
+		},
+	}
 }
 
 //+kubebuilder:rbac:groups=resources.resourcelimiter.io,resources=resourcelimiters,verbs=get;list;watch;create;update;patch;delete
@@ -89,6 +100,7 @@ func (r *ResourceLimiterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(ctrlcontroller.Options{MaxConcurrentReconciles: concurrentWorkers}).
 		For(&rlv1beta1.ResourceLimiter{}).
+		WithEventFilter(eventPredicate()).
 		Complete(r)
 }
 

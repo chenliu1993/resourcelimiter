@@ -1,9 +1,10 @@
 
-# Image URL to use all building/pushing image targets
-IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1
+
 # ENVTEST_K8S_VERSION refers to the version of kubebuilder assets to be downloaded by envtest binary.
 ENVTEST_K8S_VERSION = 1.24.2
-GITCOMMIT ?= `git rev-parse HEAD`
+GITCOMMIT ?= $(shell git rev-parse --short HEAD)
+# Image URL to use all building/pushing image targets
+IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1-$(GITCOMMIT)
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
