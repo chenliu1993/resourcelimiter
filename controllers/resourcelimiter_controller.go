@@ -120,9 +120,6 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 
 	if rl.Status.State != constants.Stopped {
 		for idx, ns := range rl.Spec.Targets {
-			// if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
-			// 	continue
-			// }
 			// Check if namespace exists
 			namespacedName = k8stypes.NamespacedName{Namespace: "", Name: string(ns)}
 			if err := r.Get(ctx, namespacedName, &namespace); err != nil {
@@ -182,12 +179,10 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		namespacedName k8stypes.NamespacedName
 		resourceQuota  = &corev1.ResourceQuota{}
 		blockOnOwner   = true
+		rlquotas       = []rlv1beta1.ResourceLimiterQuotas{}
 	)
 
 	for idx, ns := range rl.Spec.Targets {
-		// if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
-		// 	continue
-		// }
 		// Make sure namespace exists
 		namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: string(ns)}
 		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
@@ -219,16 +214,24 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 						},
 					}
 					resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
+
 					resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsCpu])
 					resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsCpu])
 					resourceQuota.Spec.Hard[corev1.ResourceLimitsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsMemory])
 					resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsMemory])
+					rlquotas = append(rlquotas, rlv1beta1.ResourceLimiterQuotas{
+						Namespace:   string(ns),
+						CpuLimits:   fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeLimitsCpu]),
+						CpuRequests: fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeRequestsCpu]),
+						MemLimits:   fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeLimitsMemory]),
+						MemRequests: fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeRequestsMemory]),
+					})
 					if er := r.Create(ctx, resourceQuota); er != nil {
 						log.WithName("ResourceLimiter").Error(er, fmt.Sprintf("create the quopta %s failed", resourceQuota.Name))
 						return ctrl.Result{}, er
 					}
 					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s successfully", resourceQuota.Name))
-					if err := r.updateStatus(ctx, rl, constants.Ready); err != nil {
+					if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
 						return ctrl.Result{}, err
 					}
 					return ctrl.Result{}, nil
@@ -241,11 +244,19 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 				resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsCpu])
 				resourceQuota.Spec.Hard[corev1.ResourceLimitsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsMemory])
 				resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsMemory])
+				rlquotas = append(rlquotas, rlv1beta1.ResourceLimiterQuotas{
+					Namespace:   string(ns),
+					CpuLimits:   fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeLimitsCpu]),
+					CpuRequests: fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeRequestsCpu]),
+					MemLimits:   fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeLimitsMemory]),
+					MemRequests: fmt.Sprintf("0/%s", rl.Spec.Types[constants.RetrainTypeRequestsMemory]),
+				})
 				if er := r.Update(ctx, resourceQuota); er != nil {
 					return ctrl.Result{}, er
 				}
+
 				log.WithName("ResourceLimiter").Info(fmt.Sprintf("update resource quota %s successfully", resourceQuota.Name))
-				if err := r.updateStatus(ctx, rl, constants.Ready); err != nil {
+				if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
 					return ctrl.Result{}, err
 				}
 			}
@@ -267,7 +278,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 			}
 			log.WithName("ResourceLimiter").Info(fmt.Sprintf("resource quota %s deleted", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 
-			if err := r.updateStatus(ctx, rl, constants.Stopped); err != nil {
+			if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: []rlv1beta1.ResourceLimiterQuotas{}}); err != nil {
 				return ctrl.Result{}, err
 			}
 		}
@@ -276,7 +287,10 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 	return ctrl.Result{}, nil
 }
 
-func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta1.ResourceLimiter, targetState string) error {
-	rl.Status.State = targetState
+func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta1.ResourceLimiter, status rlv1beta1.ResourceLimiterStatus) error {
+	rl.Status.State = status.State
+	// We do a full-update
+	rl.Status.Quotas = make([]rlv1beta1.ResourceLimiterQuotas, len(status.Quotas))
+	copy(rl.Status.Quotas, status.Quotas)
 	return r.Status().Update(ctx, rl.DeepCopy())
 }

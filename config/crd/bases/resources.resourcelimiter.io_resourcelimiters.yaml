@@ -49,9 +49,27 @@ spec:
           status:
             description: ResourceLimiterStatus defines the observed state of ResourceLimiter
             properties:
+              quotas:
+                items:
+                  properties:
+                    cpu_limits:
+                      type: string
+                    cpu_requests:
+                      type: string
+                    mem_limits:
+                      type: string
+                    mem_requests:
+                      type: string
+                    namespace:
+                      type: string
+                  required:
+                  - namespace
+                  type: object
+                type: array
               state:
                 type: string
             required:
+            - quotas
             - state
             type: object
         type: object
