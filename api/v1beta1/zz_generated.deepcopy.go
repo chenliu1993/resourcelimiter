@@ -131,8 +131,10 @@ func (in *ResourceLimiterStatus) DeepCopyInto(out *ResourceLimiterStatus) {
 	*out = *in
 	if in.Quotas != nil {
 		in, out := &in.Quotas, &out.Quotas
-		*out = make([]ResourceLimiterQuotas, len(*in))
-		copy(*out, *in)
+		*out = make(map[string]ResourceLimiterQuotas, len(*in))
+		for key, val := range *in {
+			(*out)[key] = val
+		}
 	}
 }
 

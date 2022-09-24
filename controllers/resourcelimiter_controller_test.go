@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
@@ -63,9 +64,6 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota := &corev1.ResourceQuota{}
 			namespacedName := types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -91,9 +89,6 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota = &corev1.ResourceQuota{}
 			namespacedName = types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -141,10 +136,6 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota := &corev1.ResourceQuota{}
 			namespacedName := types.NamespacedName{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
-
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, resourceQuota); err != nil {
@@ -173,9 +164,6 @@ var _ = Describe("ResourceLimiter controller", func() {
 			resourceQuota = &corev1.ResourceQuota{}
 			namespacedName = types.NamespacedName{}
 			for idx, ns := range rlstop.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
 
 				Eventually(func() bool {
 					namespacedName = types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
@@ -259,9 +247,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
+
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
@@ -375,9 +361,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
+
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
@@ -458,9 +442,7 @@ var _ = Describe("ResourceLimiter controller", func() {
 			By("By checking all the related quotas")
 			existingResourceQuota1 := &corev1.ResourceQuota{}
 			for idx, ns := range rl.Spec.Targets {
-				// if ns == constants.IgnoreKubePublic || ns == constants.IgnoreKubeSystem {
-				// 	continue
-				// }
+
 				Eventually(func() bool {
 					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
 					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
@@ -500,6 +482,139 @@ var _ = Describe("ResourceLimiter controller", func() {
 			Expect(existingResourceQuota2.Status.Used["requests.cpu"]).Should(Equal(k8sresource.MustParse("100m")))
 			Expect(existingResourceQuota2.Status.Used["limits.memory"]).Should(Equal(k8sresource.MustParse("100Mi")))
 			Expect(existingResourceQuota2.Status.Used["requests.memory"]).Should(Equal(k8sresource.MustParse("90Mi")))
+		})
+	})
+	Context("ResourceLimiter Status Quota", func() {
+		rl := &rlv1beta1.ResourceLimiter{}
+		content, err := ioutil.ReadFile(filepath.Join(pwd, "fixtures/fixtures_cr.yaml"))
+		Expect(err).NotTo(HaveOccurred())
+		err = yaml.Unmarshal(content, rl)
+		Expect(err).NotTo(HaveOccurred())
+
+		podOk := &corev1.Pod{}
+		content, err = ioutil.ReadFile(filepath.Join(pwd, "fixtures/fixtures_pod_ok.yaml"))
+		Expect(err).NotTo(HaveOccurred())
+		err = yaml.Unmarshal(content, podOk)
+		Expect(err).NotTo(HaveOccurred())
+
+		ctx := context.Background()
+
+		JustAfterEach(func() {
+			Eventually(func() bool {
+				if err := k8sClient.Delete(ctx, rl); err != nil {
+					return apierrors.IsNotFound(err)
+				}
+				return false
+			}, timeout, interval).Should(Equal(true))
+
+		})
+
+		It("Should show the right status", func() {
+			By("By creating a new ResourceLimiter")
+			Expect(k8sClient.Create(ctx, rl)).Should(Succeed())
+			var existingResourceLimiter1 rlv1beta1.ResourceLimiter
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(rl), &existingResourceLimiter1); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter1.Status.State
+			}, timeout, interval).Should(Equal(constants.Ready))
+
+			By("By checking all the related quotas")
+			existingResourceLimiter2 := &rlv1beta1.ResourceLimiter{}
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&existingResourceLimiter1), existingResourceLimiter2); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter2.Status.State
+			}, timeout, interval).Should(Equal(constants.Ready))
+			existingResourceQuota1 := &corev1.ResourceQuota{}
+			for idx, ns := range existingResourceLimiter2.Spec.Targets {
+				Eventually(func() bool {
+					namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
+					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota1); err != nil {
+						return false
+					}
+					return true
+				}, timeout, interval).Should(Equal(true))
+				Expect(reflect.DeepEqual(existingResourceLimiter2.Status.Quotas[fmt.Sprintf("rl-%s-%d", string(ns), idx)], rlv1beta1.ResourceLimiterQuotas{
+					Namespace:   string(ns),
+					CpuRequests: "0/250m",
+					CpuLimits:   "0/500m",
+					MemLimits:   "0/150Mi",
+					MemRequests: "0/120Mi",
+				})).Should(Equal(true))
+			}
+
+			By("By checking all the related quotas after createing the target pod")
+			Expect(k8sClient.Create(ctx, podOk)).Should(Succeed())
+			var existingPod1 corev1.Pod
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(podOk), &existingPod1); err != nil {
+					return "notknown"
+				}
+				return string(existingPod1.Status.Phase)
+			}, 2*timeout, interval).Should(Equal("Running"))
+			existingResourceLimiter3 := &rlv1beta1.ResourceLimiter{}
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(existingResourceLimiter2), existingResourceLimiter3); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter3.Status.State
+			}, timeout, interval).Should(Equal(constants.Ready))
+
+			Expect(reflect.DeepEqual(existingResourceLimiter3.Status.Quotas["rl-default-0"], rlv1beta1.ResourceLimiterQuotas{
+				Namespace:   "default",
+				CpuRequests: "100m/250m",
+				CpuLimits:   "200m/500m",
+				MemLimits:   "100Mi/150Mi",
+				MemRequests: "90Mi/120Mi",
+			})).Should(Equal(true))
+
+			/*By("By checking all the related quotas after updating the new rls")
+			updatedrl := existingResourceLimiter3.DeepCopy()
+			updatedrl.Spec.Types[constants.RetrainTypeLimitsCpu] = "600m"
+			updatedrl.Spec.Types[constants.RetrainTypeRequestsCpu] = "350m"
+			updatedrl.Spec.Types[constants.RetrainTypeLimitsMemory] = "160Mi"
+			updatedrl.Spec.Types[constants.RetrainTypeRequestsMemory] = "130Mi"
+			Expect(k8sClient.Update(ctx, updatedrl)).Should(Succeed())
+			var existingResourceLimiter4 rlv1beta1.ResourceLimiter
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(updatedrl), &existingResourceLimiter4); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter4.Status.State
+			}, timeout, interval).Should(Equal(constants.Ready))
+			fmt.Println(existingResourceLimiter4)
+			Expect(reflect.DeepEqual(existingResourceLimiter4.Status.Quotas["rl-default-0"], rlv1beta1.ResourceLimiterQuotas{
+				Namespace:   "default",
+				CpuRequests: "100m/350m",
+				CpuLimits:   "200m/600m",
+				MemLimits:   "100Mi/160Mi",
+				MemRequests: "90Mi/130Mi",
+			})).Should(Equal(true))*/
+			By("By checking the quotas after deleting the pod")
+			Eventually(func() bool {
+				if err := k8sClient.Delete(ctx, &existingPod1); err != nil {
+					return apierrors.IsNotFound(err)
+				}
+				return false
+			}, 5*timeout, interval).Should(Equal(true))
+			var existingResourceLimiter5 rlv1beta1.ResourceLimiter
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(existingResourceLimiter3), &existingResourceLimiter5); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter5.Status.State
+			}, timeout, interval).Should(Equal(constants.Ready))
+			Expect(reflect.DeepEqual(existingResourceLimiter5.Status.Quotas["rl-default-0"], rlv1beta1.ResourceLimiterQuotas{
+				Namespace:   "default",
+				CpuRequests: "0/250m",
+				CpuLimits:   "0/500m",
+				MemLimits:   "0/150Mi",
+				MemRequests: "0/120Mi",
+			})).Should(Equal(true))
+
 		})
 	})
 })
