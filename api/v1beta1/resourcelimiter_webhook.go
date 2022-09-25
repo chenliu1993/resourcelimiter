@@ -52,9 +52,8 @@ func (r *ResourceLimiter) Default() {
 	}
 
 	if len(r.Spec.Types) == 0 {
-		// TODO: other types will be implemented later
-		r.Spec.Types = map[ResourceLimiterType]string{"limits.cpu": "2", "limits.memory": "500Mi",
-			"requests.cpu": "1", "requests.memory": "250Mi"}
+		r.Spec.Types = map[ResourceLimiterType]string{"limits.cpu": "2", "limits.memory": "200Mi",
+			"requests.cpu": "1", "requests.memory": "150Mi"}
 	}
 }
 
@@ -63,7 +62,7 @@ func (r *ResourceLimiter) Default() {
 
 var _ webhook.Validator = &ResourceLimiter{}
 
-func recoerR(log *logr.Logger, er error) {
+func recordR(log *logr.Logger, er error) {
 	if err := recover(); err != nil {
 		log.Info(fmt.Sprintf("MustParse failed due to %v", err))
 		er = fmt.Errorf("MustParse failed due to %v", err)
@@ -74,13 +73,14 @@ func recoerR(log *logr.Logger, er error) {
 func (r *ResourceLimiter) ValidateCreate() error {
 	resourcelimiterlog.Info("validate create", "name", r.Name)
 	var err error
-	defer recoerR(&resourcelimiterlog, err)
-	k8sresource.MustParse(r.Spec.Types["limits.cpu"])
-	k8sresource.MustParse(r.Spec.Types["requests.cpu"])
-	k8sresource.MustParse(r.Spec.Types["limits.memory"])
-	k8sresource.MustParse(r.Spec.Types["requests.memory"])
+	defer recordR(&resourcelimiterlog, err)
+	for t, value := range r.Spec.Types {
+		resourcelimiterlog.Info(fmt.Sprintf("validating type field %s for %s", t, r.Name))
+		k8sresource.MustParse(value)
+	}
 	// TODO(user): fill in your validation logic upon object creation.
 	if err != nil {
+		resourcelimiterlog.Error(err, fmt.Sprintf("validating failed for %s", r.Name))
 		return err
 	}
 	return nil
@@ -90,13 +90,14 @@ func (r *ResourceLimiter) ValidateCreate() error {
 func (r *ResourceLimiter) ValidateUpdate(old runtime.Object) error {
 	resourcelimiterlog.Info("validate create", "name", r.Name)
 	var err error
-	defer recoerR(&resourcelimiterlog, err)
-	k8sresource.MustParse(r.Spec.Types["limits.cpu"])
-	k8sresource.MustParse(r.Spec.Types["requests.cpu"])
-	k8sresource.MustParse(r.Spec.Types["limits.memory"])
-	k8sresource.MustParse(r.Spec.Types["requests.memory"])
+	defer recordR(&resourcelimiterlog, err)
+	for t, value := range r.Spec.Types {
+		resourcelimiterlog.Info(fmt.Sprintf("validating type field %s for %s", t, r.Name))
+		k8sresource.MustParse(value)
+	}
 	// TODO(user): fill in your validation logic upon object creation.
 	if err != nil {
+		resourcelimiterlog.Error(err, fmt.Sprintf("validating failed for %s", r.Name))
 		return err
 	}
 	return nil
