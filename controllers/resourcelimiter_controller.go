@@ -224,12 +224,14 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 			if err := r.Get(ctx, namespacedName, resourceQuota); err != nil {
 				if apierrors.IsNotFound(err) {
 					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
+
 					resourceQuota.Name = fmt.Sprintf("rl-%s-%d", string(ns), idx)
 					resourceQuota.Namespace = string(ns)
 					if err := controllerutil.SetControllerReference(rl, resourceQuota, r.Scheme); err != nil {
 						log.WithName("ResourceLimiter").Error(err, "Set ResourceLimiter as the owner and controller")
 						return ctrl.Result{}, err
 					}
+
 					resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
 					setHard(resourceQuota, rl.Spec.Types)
 					rlquotas[fmt.Sprintf("rl-%s-%d", string(ns), idx)] = rlv1beta1.ResourceLimiterQuotas{
@@ -252,6 +254,11 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get the quota %s failed", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
 				return ctrl.Result{}, err
 			} else {
+				if !resourceQuota.ObjectMeta.DeletionTimestamp.IsZero() {
+					// For whatever reason this quota is being deleted, we should remove it from the status list.
+					return r.reconcileManualDeletion(ctx, rl, resourceQuota)
+				}
+
 				currl := resourceQuota.DeepCopy()
 				curCpuLimits = currl.Status.Used[corev1.ResourceName(constants.RetrainTypeLimitsCpu)]
 				curCpuRequests = currl.Status.Used[corev1.ResourceName(constants.RetrainTypeRequestsCpu)]
@@ -299,6 +306,31 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		}
 	}
 	return ctrl.Result{}, nil
+}
+
+func (r *ResourceLimiterReconciler) reconcileManualDeletion(ctx context.Context, rl *rlv1beta1.ResourceLimiter, quota *corev1.ResourceQuota) (ctrl.Result, error) {
+	log := ctrl.LoggerFrom(ctx).WithName("ResourceLimiter")
+	// 1. Remove the status recorded in the status
+	newrl := rl.DeepCopy()
+	log.Info(fmt.Sprintf("removing the non-exist quota %s from the %s quotas lists", quota.Name, rl.Name))
+	patch := client.MergeFrom(newrl)
+	delete(newrl.Status.Quotas, quota.Name)
+	if err := r.Patch(ctx, newrl, patch); err != nil {
+		log.Error(err, "unable to register finalizer")
+		return ctrl.Result{}, err
+	}
+
+	// 2. If the quota is empty then stop the resource limiter
+	currl := &rlv1beta1.ResourceLimiter{}
+	if err := r.Get(ctx, client.ObjectKeyFromObject(newrl), currl); err != nil {
+		log.Error(err, "failed to get new resourcelimiter cr")
+		return ctrl.Result{}, err
+	}
+	if len(currl.Status.Quotas) != 0 {
+		return ctrl.Result{}, nil
+	}
+	log.Info(fmt.Sprintf("stopping the resourcelimiter  %s", currl.Name))
+	return ctrl.Result{}, r.updateStatus(ctx, currl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: map[string]rlv1beta1.ResourceLimiterQuotas{}})
 }
 
 func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta1.ResourceLimiter, status rlv1beta1.ResourceLimiterStatus) error {

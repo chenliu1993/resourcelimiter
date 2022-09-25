@@ -615,6 +615,31 @@ var _ = Describe("ResourceLimiter controller", func() {
 				MemRequests: "0/120Mi",
 			})).Should(Equal(true))
 
+			By("Should be in stopped state when all quotas are deleted")
+			existingResourceQuota2 := &corev1.ResourceQuota{}
+			for idx, ns := range existingResourceLimiter2.Spec.Targets {
+				namespacedName := types.NamespacedName{Name: fmt.Sprintf("rl-%s-%d", string(ns), idx), Namespace: string(ns)}
+				Eventually(func() bool {
+					if err := k8sClient.Get(ctx, namespacedName, existingResourceQuota2); err != nil {
+						return false
+					}
+					return true
+				}, timeout, interval).Should(Equal(true))
+				Eventually(func() bool {
+					if err := k8sClient.Delete(ctx, existingResourceQuota2); err != nil {
+						return false
+					}
+					return true
+				}, timeout, interval).Should(Equal(true))
+			}
+			var existingResourceLimiter6 rlv1beta1.ResourceLimiter
+			Eventually(func() string {
+				if err := k8sClient.Get(ctx, client.ObjectKeyFromObject(&existingResourceLimiter5), &existingResourceLimiter6); err != nil {
+					return "notknown"
+				}
+				return existingResourceLimiter5.Status.State
+			}, timeout, interval).Should(Equal(constants.Stopped))
+			Expect(len(existingResourceLimiter6.Status.Quotas)).Should(Equal(0))
 		})
 	})
 })
