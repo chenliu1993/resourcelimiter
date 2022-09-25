@@ -154,17 +154,13 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 		}
 	}
 
-	patch := client.MergeFrom(rl.DeepCopy())
-	controllerutil.RemoveFinalizer(rl, constants.DefaultFinalizer)
-	if err := r.Patch(ctx, rl, patch); err != nil {
-		log.WithName("ResourceLimiter").Error(err, "unable to register finalizer")
+	newrl := rl.DeepCopy()
+	patch := client.MergeFrom(newrl.DeepCopy())
+	controllerutil.RemoveFinalizer(newrl, constants.DefaultFinalizer)
+	if err := r.Patch(ctx, newrl, patch); err != nil {
+		log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("unable to register finalizer FOR %s", newrl.Name))
 		return ctrl.Result{}, err
 	}
-	// rlstop := rl.DeepCopy()
-	// controllerutil.RemoveFinalizer(rlstop, constants.DefaultFinalizer)
-	// if err := r.Update(ctx, rlstop); err != nil {
-	// 	return ctrl.Result{}, err
-	// }
 
 	return ctrl.Result{}, nil
 }
@@ -293,12 +289,8 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
 			return ctrl.Result{}, err
 		}
-	} else {
-		if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: map[string]rlv1beta1.ResourceLimiterQuotas{}}); err != nil {
-			return ctrl.Result{}, err
-		}
 	}
-	return ctrl.Result{}, nil
+	return ctrl.Result{}, r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: map[string]rlv1beta1.ResourceLimiterQuotas{}})
 }
 
 func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta1.ResourceLimiter, status rlv1beta1.ResourceLimiterStatus) error {
