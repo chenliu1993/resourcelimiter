@@ -1,6 +1,7 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
+  namespace: {{ .Values.namespace }}
   name: {{ include "resourcelimiter.fullname" . }}
   labels:
     {{- include "resourcelimiter.labels" . | nindent 4 }}
@@ -34,17 +35,17 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
-            - name: http
-              containerPort: 80
+            - name: httphealthz
+              containerPort: 8081
               protocol: TCP
           livenessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /healthz
+              port: httphealthz
           readinessProbe:
             httpGet:
-              path: /
-              port: http
+              path: /readyz
+              port: httphealthz
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}
