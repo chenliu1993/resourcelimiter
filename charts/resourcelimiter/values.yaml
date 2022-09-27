@@ -15,8 +15,8 @@ imagePullSecrets: [name: "registry-secret-private"]
 nameOverride: ""
 fullnameOverride: ""
 
-clusterroleBindingName: "rl-clusterrolebinding"
-clusterroleName: "rl-clusterrole"
+clusterroleBindingName: "system:controler:resourcelimiter-controller"
+clusterroleName: "system:controler:resourcelimiter-controller"
 
 serviceAccount:
   # Specifies whether a service account should be created
@@ -25,7 +25,7 @@ serviceAccount:
   annotations: {}
   # The name of the service account to use.
   # If not set and create is true, a name is generated using the fullname template
-  name: "rl-serviceaccount"
+  name: "resourcelimiter-controller"
   namespace: "kube-system"
 
 podAnnotations: {}
