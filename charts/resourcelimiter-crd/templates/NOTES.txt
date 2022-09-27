@@ -1,0 +1,3 @@
+Use `kubectl get crd | grep resourcelimiter` to make sure crd is installed
+This is not a application chart, use it as the dependency for resourcelimiter chart
+
