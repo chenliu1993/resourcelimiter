@@ -289,6 +289,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
 			return ctrl.Result{}, err
 		}
+		return ctrl.Result{}, nil
 	}
 	return ctrl.Result{}, r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: map[string]rlv1beta1.ResourceLimiterQuotas{}})
 }
