@@ -1,0 +1,6 @@
+dependencies:
+- name: resourcelimiter-crd
+  repository: https://www.cliufreever.com/chartrepo/library/
+  version: 0.1.0
+digest: sha256:eb96eecfcceb49aabbc84149b9b421ca686fb54b713f91075c5c7a2027e98154
+generated: "2022-09-27T19:44:37.584722015+08:00"
