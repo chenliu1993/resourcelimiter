@@ -1,6 +1,6 @@
 apiVersion: v2
-name: resourcelimiter
-description: A Helm chart for Kubernetes
+name: resourcelimiter-crd
+description: A Helm chart for CRD for resourcelimiter
 
 # A chart can be either an 'application' or a 'library' chart.
 #
@@ -21,8 +21,4 @@ version: 0.1.0
 # incremented each time you make changes to the application. Versions are not expected to
 # follow Semantic Versioning. They should reflect the version the application is using.
 # It is recommended to use it with quotes.
-appVersion: "v0.0.1"
-dependencies:
-- name: resourcelimiter-crd
-  version: "v1beta1"
-  repository: "https://example.com/charts"
+appVersion: "v1beta1"
