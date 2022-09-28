@@ -8,3 +8,4 @@ nodes:
       apiServer:
         extraArgs:
           enable-admission-plugins: NodeRestriction,MutatingAdmissionWebhook,ValidatingAdmissionWebhook,ResourceQuota,LimitRanger
+  - role: worker

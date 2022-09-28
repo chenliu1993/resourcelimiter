@@ -2,6 +2,9 @@ apiVersion: resources.resourcelimiter.io/v1beta1
 kind: ResourceLimiter
 metadata:
   name: resourcelimiter-sample-fixtures
+  labels:
+    resourcelimiter-mutate: enabled
+    resourcelimiter-validate: enabled
 spec:
   targets: 
   - default

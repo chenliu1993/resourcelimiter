@@ -4,7 +4,9 @@
 ENVTEST_K8S_VERSION = 1.24.2
 GITCOMMIT ?= $(shell git rev-parse --short HEAD)
 # Image URL to use all building/pushing image targets
-IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1-$(GITCOMMIT)
+# IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1-$(GITCOMMIT)
+IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1
+CHECKERIMG ?= www.cliufreever.com/library/resourcelimiter-checker:v0.0.1
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -73,9 +75,18 @@ run: manifests generate fmt vet ## Run a controller from your host.
 docker-build: test ## Build docker image with the manager.
 	docker build -t ${IMG} .
 
+
+.PHONY: docker-checker-build
+docker-checker-build:  ## Build docker image with the checker.
+	docker build -t ${CHECKERIMG} -f Dockerfile.checker .
+
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
+
+.PHONY: docker-checker-push
+docker-checker-push: ## Push docker image with the manager.
+	docker push ${CHECKERIMG}
 
 ##@ Deployment
 
