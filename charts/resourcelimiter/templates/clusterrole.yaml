@@ -50,3 +50,24 @@ rules:
   - get
   - patch
   - update
+- apiGroups: 
+  - admissionregistration.k8s.io
+  resources:
+  - mutatingwebhookconfigurations
+  - validatingwebhookconfigurations
+  verbs:
+  - create
+  - get
+  - delete
+  - list 
+  - patch 
+  - update 
+  - watch
+- apiGroups:
+  - ""
+  resources:
+  - pods
+  verbs:
+  - update
+  - create
+
