@@ -55,7 +55,7 @@ func createOrUpdateWebhookConfiguration(clientset *kubernetes.Clientset, caPEM *
 							admissionregistrationv1.Create,
 						},
 						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{"resources.resourcelimiters.io"},
+							APIGroups:   []string{"resources.resourcelimiter.io"},
 							APIVersions: []string{"v1beta1"},
 							Resources:   []string{"resourcelimiters"},
 						},
@@ -125,7 +125,7 @@ func createOrUpdateWebhookConfiguration(clientset *kubernetes.Clientset, caPEM *
 							admissionregistrationv1.Update,
 						},
 						Rule: admissionregistrationv1.Rule{
-							APIGroups:   []string{"resources.resourcelimiters.io"},
+							APIGroups:   []string{"resources.resourcelimiter.io"},
 							APIVersions: []string{"v1beta1"},
 							Resources:   []string{"resourcelimiters"},
 						},

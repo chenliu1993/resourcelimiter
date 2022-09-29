@@ -6,7 +6,7 @@ replicaCount: 1
 namespace: "kube-system"
 image:
   repository: www.cliufreever.com/library/resourcelimiter-controller
-  pullPolicy: Always
+  pullPolicy: IfNotPresent
   # Overrides the image tag whose default is the chart appVersion.
   tag: ""
 checkerimage:
@@ -17,7 +17,7 @@ checkerimage:
 # User should have the account first on www.cliufreever.com
 imagePullSecrets: []
 nameOverride: ""
-fullnameOverride: ""
+fullnameOverride: "resourcelimiter-controller"
 
 clusterroleBindingName: "system:controler:resourcelimiter-controller"
 clusterroleName: "system:controler:resourcelimiter-controller"
@@ -55,6 +55,7 @@ resources: # {}
   # choice for the user. This also increases chances charts run on environments with little
   # resources, such as Minikube. If you do want to specify resources, uncomment the following
   # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # required
   limits:
     cpu: 200m
     memory: 256Mi
