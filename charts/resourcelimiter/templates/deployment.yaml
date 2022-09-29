@@ -20,6 +20,7 @@ spec:
       {{- end }}
       labels:
         {{- include "resourcelimiter.selectorLabels" . | nindent 8 }}
+        {{- include "resourcelimiter.svcLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
@@ -46,6 +47,16 @@ spec:
             httpGet:
               path: /readyz
               port: httphealthz
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+        - name: checker
+          image: "{{ .Values.checkerimage.repository }}:{{ .Values.checkerimage.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.checkerimage.pullPolicy }}
+          env:
+          - name: POD_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
           resources:
             {{- toYaml .Values.resources | nindent 12 }}
       {{- with .Values.nodeSelector }}

@@ -36,6 +36,7 @@ Common labels
 {{- define "resourcelimiter.labels" -}}
 helm.sh/chart: {{ include "resourcelimiter.chart" . }}
 {{ include "resourcelimiter.selectorLabels" . }}
+{{ include "resourcelimiter.svcLabels" . }}
 {{- if .Chart.AppVersion }}
 app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
 {{- end }}
@@ -48,6 +49,13 @@ Selector labels
 {{- define "resourcelimiter.selectorLabels" -}}
 app.kubernetes.io/name: {{ include "resourcelimiter.name" . }}
 app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{/*
+Webhook Service labels
+*/}}
+{{- define "resourcelimiter.svcLabels" -}}
+webhook.svc/marker: {{ .Release.Name }}
 {{- end }}
 
 {{/*

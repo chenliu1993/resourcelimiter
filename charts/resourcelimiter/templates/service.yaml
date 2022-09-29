@@ -1,15 +1,18 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ include "resourcelimiter.fullname" . }}
+  name: rl-checker
+  namespace: {{ .Values.namespace }}
   labels:
     {{- include "resourcelimiter.labels" . | nindent 4 }}
 spec:
   type: {{ .Values.service.type }}
   ports:
-    - port: {{ .Values.service.port }}
-      targetPort: http
+    - port: 443
+      targetPort: {{ .Values.service.webhookPort }}
       protocol: TCP
-      name: http
+      name: https
   selector:
-    {{- include "resourcelimiter.selectorLabels" . | nindent 4 }}
+    {{- include "resourcelimiter.svcLabels" . | nindent 4 }}
+
+

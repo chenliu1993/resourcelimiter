@@ -175,16 +175,16 @@ func setHard(resourceQuota *corev1.ResourceQuota, types map[rlv1beta1.ResourceLi
 func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1.ResourceLimiter) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	if len(rl.Spec.Targets) == 0 {
-		// Empty lists means all namespaces should be applied
-		rl.Spec.Targets = []rlv1beta1.ResourceLimiterNamespace{}
-	}
+	// if len(rl.Spec.Targets) == 0 {
+	// 	// Empty lists means all namespaces should be applied
+	// 	rl.Spec.Targets = []rlv1beta1.ResourceLimiterNamespace{}
+	// }
 
-	if len(rl.Spec.Types) == 0 {
-		// TODO: other types will be implemented later
-		rl.Spec.Types = map[rlv1beta1.ResourceLimiterType]string{constants.RetrainTypeLimitsCpu: "2", constants.RetrainTypeLimitsMemory: "200Mi",
-			constants.RetrainTypeRequestsCpu: "1", constants.RetrainTypeRequestsMemory: "150Mi"}
-	}
+	// if len(rl.Spec.Types) == 0 {
+	// 	// TODO: other types will be implemented later
+	// 	rl.Spec.Types = map[rlv1beta1.ResourceLimiterType]string{constants.RetrainTypeLimitsCpu: "2", constants.RetrainTypeLimitsMemory: "200Mi",
+	// 		constants.RetrainTypeRequestsCpu: "1", constants.RetrainTypeRequestsMemory: "150Mi"}
+	// }
 
 	// Create ResourceQuota per namespace
 	var (
