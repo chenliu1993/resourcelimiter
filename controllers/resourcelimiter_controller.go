@@ -222,9 +222,9 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 			newNamespace.Labels[constants.ValidateNamespaceLabel] = "enabled"
 		}
 
-		log.WithName("ResourceLimiter").Info("set labels for namespace %s", string(ns))
+		log.WithName("ResourceLimiter").Info(fmt.Sprintf("set labels for namespace %s", string(ns)))
 		if err := r.Update(ctx, newNamespace); err != nil {
-			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s for resource quota not found, please create it first", string(ns)))
+			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", string(ns)))
 			return ctrl.Result{}, err
 		}
 
