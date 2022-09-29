@@ -70,6 +70,17 @@ rules:
   resources:
   - pods
   verbs:
-  - update
-  - create
+  - get
+  - list
+  - watch
+- apiGroups:
+  - apps
+  - extensions
+  resources:
+  - daemonsets
+  - deployments
+  verbs:
+  - get
+  - list
+  - watch
 
