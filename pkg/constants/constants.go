@@ -15,12 +15,14 @@ const (
 )
 
 const (
-// IgnoreKubeSystem rlv1beta1.ResourceLimiterNamespace = "kube-system"
-// IgnoreKubePublic rlv1beta1.ResourceLimiterNamespace = "kube-public"
+	IgnoreKubeSystem rlv1beta1.ResourceLimiterNamespace = "kube-system"
+	IgnoreKubePublic rlv1beta1.ResourceLimiterNamespace = "kube-public"
 )
 
 const (
-	DefaultFinalizer = "resourcelimiter.finalizer"
+	DefaultFinalizer       = "resourcelimiter.finalizer"
+	MutateNamespaceLabel   = "resourcelimiter-mutate"
+	ValidateNamespaceLabel = "resourcelimiter-validate"
 )
 
 const (

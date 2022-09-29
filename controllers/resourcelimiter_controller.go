@@ -197,7 +197,10 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 	)
 
 	for idx, ns := range rl.Spec.Targets {
-		// Make sure namespace exists
+		if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+			continue
+		}
+		// Make sure namespace exists and label it with checker label
 		namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: string(ns)}
 		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
 			if apierrors.IsNotFound(err) {
@@ -205,6 +208,23 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 			} else {
 				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get namespace %s for resource quota failed", string(ns)))
 			}
+			return ctrl.Result{}, err
+		}
+
+		newNamespace := namespace.DeepCopy()
+		if len(newNamespace.Labels) == 0 {
+			newNamespace.Labels = map[string]string{}
+		}
+		if val, ok := newNamespace.Labels[constants.MutateNamespaceLabel]; !ok || val != "enabled" {
+			newNamespace.Labels[constants.MutateNamespaceLabel] = "enabled"
+		}
+		if val, ok := newNamespace.Labels[constants.ValidateNamespaceLabel]; !ok || val != "enabled" {
+			newNamespace.Labels[constants.ValidateNamespaceLabel] = "enabled"
+		}
+
+		log.WithName("ResourceLimiter").Info("set labels for namespace %s", string(ns))
+		if err := r.Update(ctx, newNamespace); err != nil {
+			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s for resource quota not found, please create it first", string(ns)))
 			return ctrl.Result{}, err
 		}
 

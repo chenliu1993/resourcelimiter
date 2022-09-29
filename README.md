@@ -4,8 +4,8 @@ A controller to make admins conveniently set resource quotas acorss namespaces
 ## Description
 By combing the function of CRD and controller, make admins to set resources quotas across namespaces.
 
-## Note
-Label the namespace you want to set quotas
+<!-- ## Note
+Label the namespace you want to set quotas -->
 
 ## Getting Started
 You’ll need a Kubernetes cluster to run against. You can use [KIND](https://sigs.k8s.io/kind) to get a local cluster for testing, or run against a remote cluster.
