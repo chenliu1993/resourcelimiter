@@ -10,6 +10,7 @@ import (
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
 	"github.com/chenliu1993/resourcelimiter/pkg/constants"
 	admissionv1 "k8s.io/api/admission/v1"
+	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,11 +24,6 @@ var (
 	deserializer  = codecs.UniversalDeserializer()
 	resFormErr    error
 )
-
-// var ignoredNamespaces = []string{
-// 	metav1.NamespaceSystem,
-// 	metav1.NamespacePublic,
-// }
 
 // const (
 // 	admissionWebhookAnnotationMutatewKey  = "resourcelimiter.cliufreever.io/mutate"
@@ -79,8 +75,7 @@ func mutationRequired(rl *rlv1beta1.ResourceLimiter) (bool, bool) {
 	return requiredTypes, requiredTargets
 }
 
-func updateResourceLimiterTypes(target map[rlv1beta1.ResourceLimiterType]string, added map[rlv1beta1.ResourceLimiterType]string) (patch []patchOperation) {
-	target = map[rlv1beta1.ResourceLimiterType]string{}
+func updateResourceLimiterTypes(added map[rlv1beta1.ResourceLimiterType]string) (patch []patchOperation) {
 	patch = append(patch, patchOperation{
 		Op:    "add",
 		Path:  "/spec/types",
@@ -117,7 +112,7 @@ func createPatch(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimit
 
 	requiredTypes, requiredTargets := mutationRequired(rl)
 	if requiredTypes {
-		patch = append(patch, updateResourceLimiterTypes(rl.Spec.Types, desired.Spec.Types)...)
+		patch = append(patch, updateResourceLimiterTypes(desired.Spec.Types)...)
 	}
 
 	if requiredTargets {
@@ -179,28 +174,11 @@ func recordR(log *log.Logger, er error) {
 
 func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	req := ar.Request
-	var (
-		rl    rlv1beta1.ResourceLimiter
-		pod   corev1.Pod
-		isPod bool
-	)
-
 	defer recordR(warningLogger, resFormErr)
-	infoLogger.Printf("begin marshal check")
-	if req.Kind.Kind == "Pod" || req.Kind.Kind == "Deployment" || req.Kind.Kind == "Daemonset" {
-		isPod = true
-		infoLogger.Printf("begin marshal pod %s of %s", req.Name, req.Kind.Kind)
-		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
-			warningLogger.Printf("Could not unmarshal raw object into pod either: %v", err)
-			return &admissionv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: err.Error(),
-				},
-			}
-		}
-	} else {
-		isPod = false
+
+	switch req.Kind.Kind {
+	case "ResourceLimiter":
+		var rl rlv1beta1.ResourceLimiter
 		infoLogger.Printf("begin marshal resourcelimiter %s of %s", req.Name, req.Kind.Kind)
 		if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
 			warningLogger.Printf("Could not unmarshal raw object into resourcelimiter, try pod: %v", err)
@@ -211,13 +189,36 @@ func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admission
 				},
 			}
 		}
-	}
-
-	infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
-		req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
-
-	if isPod {
-		// Ignore init and ehperamal for now
+		infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
+		for _, ns := range rl.Spec.Targets {
+			if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+				return &admissionv1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Message: "should avoid limit on the preset namespace",
+					},
+				}
+			}
+		}
+		for t, value := range rl.Spec.Types {
+			warningLogger.Printf(fmt.Sprintf("validating type field %s for %s", t, rl.Name))
+			k8sresource.MustParse(value)
+		}
+	case "Pod":
+		var pod corev1.Pod
+		infoLogger.Printf("begin marshal pod %s of %s", req.Name, req.Kind.Kind)
+		if err := json.Unmarshal(req.Object.Raw, &pod); err != nil {
+			warningLogger.Printf("Could not unmarshal raw object into pod either: %v", err)
+			return &admissionv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
+		infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, req.UID, req.Operation, req.UserInfo)
 		for _, cont := range pod.Spec.Containers {
 			if cont.Resources.Limits == nil || len(cont.Resources.Limits) == 0 || cont.Resources.Requests == nil || len(cont.Resources.Requests) == 0 {
 				return &admissionv1.AdmissionResponse{
@@ -238,11 +239,74 @@ func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admission
 			}
 
 		}
-	} else {
-		for t, value := range rl.Spec.Types {
-			warningLogger.Printf(fmt.Sprintf("validating type field %s for %s", t, rl.Name))
-			k8sresource.MustParse(value)
+	case "Deployment":
+		var deployment appsv1.Deployment
+		infoLogger.Printf("begin marshal deployment %s of %s", req.Name, req.Kind.Kind)
+		if err := json.Unmarshal(req.Object.Raw, &deployment); err != nil {
+			warningLogger.Printf("Could not unmarshal raw object into deployment either: %v", err)
+			return &admissionv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
 		}
+		infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, req.UID, req.Operation, req.UserInfo)
+		for _, cont := range deployment.Spec.Template.Spec.Containers {
+			if cont.Resources.Limits == nil || len(cont.Resources.Limits) == 0 || cont.Resources.Requests == nil || len(cont.Resources.Requests) == 0 {
+				return &admissionv1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Message: fmt.Sprintf("failed to validate deployment %s not set any resources limits or requests", deployment.Name),
+					},
+				}
+			}
+			if cont.Resources.Limits != nil {
+				k8sresource.MustParse(cont.Resources.Limits.Cpu().String())
+				k8sresource.MustParse(cont.Resources.Limits.Memory().String())
+			}
+
+			if cont.Resources.Requests != nil {
+				k8sresource.MustParse(cont.Resources.Requests.Cpu().String())
+				k8sresource.MustParse(cont.Resources.Requests.Memory().String())
+			}
+		}
+	case "Daemonset":
+		var daemonset appsv1.DaemonSet
+		infoLogger.Printf("begin marshal daemonset %s of %s", req.Name, req.Kind.Kind)
+		if err := json.Unmarshal(req.Object.Raw, &daemonset); err != nil {
+			warningLogger.Printf("Could not unmarshal raw object into daemonset either: %v", err)
+			return &admissionv1.AdmissionResponse{
+				Allowed: false,
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
+		infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, req.UID, req.Operation, req.UserInfo)
+		for _, cont := range daemonset.Spec.Template.Spec.Containers {
+			if cont.Resources.Limits == nil || len(cont.Resources.Limits) == 0 || cont.Resources.Requests == nil || len(cont.Resources.Requests) == 0 {
+				return &admissionv1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Message: fmt.Sprintf("failed to validate daemonset %s not set any resources limits or requests", daemonset.Name),
+					},
+				}
+			}
+			if cont.Resources.Limits != nil {
+				k8sresource.MustParse(cont.Resources.Limits.Cpu().String())
+				k8sresource.MustParse(cont.Resources.Limits.Memory().String())
+			}
+
+			if cont.Resources.Requests != nil {
+				k8sresource.MustParse(cont.Resources.Requests.Cpu().String())
+				k8sresource.MustParse(cont.Resources.Requests.Memory().String())
+			}
+		}
+	default:
+		warningLogger.Printf("should not been here")
 	}
 
 	return &admissionv1.AdmissionResponse{
