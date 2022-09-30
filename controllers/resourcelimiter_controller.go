@@ -77,9 +77,9 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 	}
 
 	newrl := rl.DeepCopy()
-
 	// Add our finalizer if it does not exist
 	if !controllerutil.ContainsFinalizer(newrl, constants.DefaultFinalizer) {
+		log.WithName("ResourceLimiter").Info(fmt.Sprintf("add finalizer for %s", rl.Name))
 		patch := client.MergeFrom(newrl)
 		controllerutil.AddFinalizer(newrl, constants.DefaultFinalizer)
 		if err := r.Patch(ctx, newrl, patch); err != nil {
@@ -93,10 +93,10 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 
 	// Under deletion
 	if !rl.ObjectMeta.DeletionTimestamp.IsZero() {
-		return r.reconcileDelete(ctx, newrl)
+		return r.reconcileDelete(ctx, &rl)
 	}
 
-	return r.reconcile(ctx, newrl)
+	return r.reconcile(ctx, &rl)
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -154,6 +154,30 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 		}
 	}
 
+	for _, old := range rl.Spec.Targets {
+		namespacedName = k8stypes.NamespacedName{Namespace: string(old), Name: string(old)}
+		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
+			if apierrors.IsNotFound(err) {
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: namespace %s for resource quota not found, please create it first", string(old)))
+			} else {
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: get namespace %s for resource quota failed", string(old)))
+			}
+			return ctrl.Result{}, err
+		}
+
+		newNamespace := namespace.DeepCopy()
+		for k, _ := range namespace.GetLabels() {
+			if k == constants.MutateNamespaceLabel || k == constants.ValidateNamespaceLabel {
+				delete(newNamespace.Labels, k)
+			}
+		}
+		log.WithName("ResourceLimiter").Info(fmt.Sprintf("remove labels for namespace %s", string(old)))
+		if err := r.Update(ctx, newNamespace); err != nil {
+			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", string(old)))
+			return ctrl.Result{}, err
+		}
+	}
+
 	newrl := rl.DeepCopy()
 	patch := client.MergeFrom(newrl.DeepCopy())
 	controllerutil.RemoveFinalizer(newrl, constants.DefaultFinalizer)
@@ -174,17 +198,6 @@ func setHard(resourceQuota *corev1.ResourceQuota, types map[rlv1beta1.ResourceLi
 
 func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1.ResourceLimiter) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
-
-	// if len(rl.Spec.Targets) == 0 {
-	// 	// Empty lists means all namespaces should be applied
-	// 	rl.Spec.Targets = []rlv1beta1.ResourceLimiterNamespace{}
-	// }
-
-	// if len(rl.Spec.Types) == 0 {
-	// 	// TODO: other types will be implemented later
-	// 	rl.Spec.Types = map[rlv1beta1.ResourceLimiterType]string{constants.RetrainTypeLimitsCpu: "2", constants.RetrainTypeLimitsMemory: "200Mi",
-	// 		constants.RetrainTypeRequestsCpu: "1", constants.RetrainTypeRequestsMemory: "150Mi"}
-	// }
 
 	// Create ResourceQuota per namespace
 	var (
