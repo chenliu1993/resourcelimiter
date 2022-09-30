@@ -141,6 +141,17 @@ func createOrUpdateWebhookConfiguration(clientset *kubernetes.Clientset, caPEM *
 							Resources:   []string{"pods"},
 						},
 					},
+					{
+						Operations: []admissionregistrationv1.OperationType{
+							admissionregistrationv1.Create,
+							admissionregistrationv1.Update,
+						},
+						Rule: admissionregistrationv1.Rule{
+							APIGroups:   []string{"apps", "extensions"},
+							APIVersions: []string{"v1"},
+							Resources:   []string{"deployments", "daemonsets"},
+						},
+					},
 				},
 				NamespaceSelector: &metav1.LabelSelector{
 					MatchLabels: map[string]string{
