@@ -165,16 +165,17 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 	}
 }
 
-func recordR(log *log.Logger, er error) {
+func recordR(log *log.Logger) {
 	if err := recover(); err != nil {
 		log.Printf(fmt.Sprintf("MustParse failed due to %v", err))
-		er = fmt.Errorf("MustParse failed due to %v", err)
+		resFormErr = fmt.Errorf("MustParse failed due to %v", err)
 	}
 }
 
 func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	req := ar.Request
-	defer recordR(warningLogger, resFormErr)
+	resFormErr = nil
+	defer recordR(warningLogger)
 
 	switch req.Kind.Kind {
 	case "ResourceLimiter":
