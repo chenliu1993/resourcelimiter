@@ -2,7 +2,7 @@
 A controller to make admins conveniently set resource quotas acorss namespaces
 
 ## Demo
-Please refer to https://www.cliufreever.com/webblog/2022/10/14/resourcelimiter-usage-example/
+Please refer to [v1beta1 demo](https://www.cliufreever.com/webblog/2022/10/14/resourcelimiter-usage-example/)
 
 ## Description
 By combing the function of CRD and controller, make admins to set resources quotas across namespaces.
