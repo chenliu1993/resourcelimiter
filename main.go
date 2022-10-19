@@ -33,6 +33,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
 	resourcesv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	resourcesv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	"github.com/chenliu1993/resourcelimiter/controllers"
 	//+kubebuilder:scaffold:imports
 )
@@ -46,6 +47,7 @@ func init() {
 	utilruntime.Must(clientgoscheme.AddToScheme(scheme))
 
 	utilruntime.Must(resourcesv1beta1.AddToScheme(scheme))
+	utilruntime.Must(resourcesv1beta2.AddToScheme(scheme))
 	//+kubebuilder:scaffold:scheme
 }
 

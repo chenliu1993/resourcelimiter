@@ -12,4 +12,12 @@ resources:
   kind: ResourceLimiter
   path: github.com/chenliu1993/resourcelimiter/api/v1beta1
   version: v1beta1
+- api:
+    crdVersion: v1
+    namespaced: true
+  domain: resourcelimiter.io
+  group: resources
+  kind: ResourceLimiter
+  path: github.com/chenliu1993/resourcelimiter/api/v1beta2
+  version: v1beta2
 version: "3"
