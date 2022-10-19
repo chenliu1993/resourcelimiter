@@ -20,9 +20,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type ResourceLimiterNamespace string
-type ResourceLimiterType string
-
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
@@ -31,16 +28,15 @@ type ResourceLimiterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Targets map[string]ResourceLimiterQuotas `json:"targets,omitempty"`
-	Applied bool                             `json:"applied,omitempty"`
+	Quotas  map[string]ResourceLimiterQuota `json:"targets,omitempty"`
+	Applied bool                            `json:"applied,omitempty"`
 }
 
-type ResourceLimiterQuotas struct {
-	Namespace   string `json:"namespace"`
-	CpuRequests string `json:"cpu_requests,omitempty"`
-	MemRequests string `json:"mem_requests,omitempty"`
-	CpuLimits   string `json:"cpu_limits,omitempty"`
-	MemLimits   string `json:"mem_limits,omitempty"`
+type ResourceLimiterQuota struct {
+	CpuRequest string `json:"cpu_requests,omitempty"`
+	MemRequest string `json:"mem_requests,omitempty"`
+	CpuLimit   string `json:"cpu_limits,omitempty"`
+	MemLimit   string `json:"mem_limits,omitempty"`
 }
 
 // ResourceLimiterStatus defines the observed state of ResourceLimiter
@@ -48,8 +44,8 @@ type ResourceLimiterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	State  string                           `json:"state"`
-	Quotas map[string]ResourceLimiterQuotas `json:"quotas"`
+	State  string                          `json:"state"`
+	Quotas map[string]ResourceLimiterQuota `json:"quotas"`
 }
 
 //+kubebuilder:object:root=true
