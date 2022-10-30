@@ -8,10 +8,12 @@ import (
 	"net/http"
 
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	rlv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	"github.com/chenliu1993/resourcelimiter/pkg/constants"
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -450,4 +452,90 @@ func (whsvr *WebhookServer) ServeValidate(w http.ResponseWriter, r *http.Request
 		warningLogger.Printf("Can't write response: %v", err)
 		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
 	}
+}
+
+func convertV1beta1IntoV1beta2(oldObject *rlv1beta1.ResourceLimiter) (*rlv1beta2.ResourceLimiter, metav1.Status) {
+	infoLogger.Printf("begin converting into v1beta2")
+	fromVersion := "resources.resourcelimiter.io/v1beta1"
+	toVersion := "resources.resourcelimiter.io/v1beta2"
+
+	if toVersion == fromVersion {
+		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
+	}
+
+	newObject := &rlv1beta2.ResourceLimiter{}
+
+	if err := oldObject.ConvertTo(newObject); err != nil {
+		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
+	}
+	return newObject, statusSucceed()
+}
+
+func convertV1beta2IntoV1beta1(oldObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
+	infoLogger.Printf("begin converting into v1beta1")
+	fromVersion := "resources.resourcelimiter.io/v1beta2"
+	toVersion := "resources.resourcelimiter.io/v1beta1"
+
+	if toVersion == fromVersion {
+		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
+	}
+
+	newObject := &rlv1beta1.ResourceLimiter{}
+
+	if err := oldObject.ConvertFrom(newObject); err != nil {
+		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
+	}
+	return newObject, statusSucceed()
+}
+
+func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request, convert convertFunc) {
+	var body []byte
+	if r.Body != nil {
+		if data, err := ioutil.ReadAll(r.Body); err == nil {
+			body = data
+		}
+	}
+
+	contentType := r.Header.Get("Content-Type")
+	serializer := getInputSerializer(contentType)
+	if serializer == nil {
+		msg := fmt.Sprintf("invalid Content-Type header `%s`", contentType)
+		warningLogger.Printf(msg)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+
+	infoLogger.Printf("handling request: %v", body)
+	convertReview := v1beta1.ConversionReview{}
+	if _, _, err := serializer.Decode(body, nil, &convertReview); err != nil {
+		warningLogger.Printf(err.Error())
+		convertReview.Response = conversionResponseFailureWithMessagef("failed to deserialize body (%v) with error %v", string(body), err)
+	} else {
+		convertReview.Response = doConversion(convertReview.Request, convert)
+		convertReview.Response.UID = convertReview.Request.UID
+	}
+	infoLogger.Printf(fmt.Sprintf("sending response: %v", convertReview.Response))
+
+	// reset the request, it is not needed in a response.
+	convertReview.Request = &v1beta1.ConversionRequest{}
+
+	accept := r.Header.Get("Accept")
+	outSerializer := getOutputSerializer(accept)
+	if outSerializer == nil {
+		msg := fmt.Sprintf("invalid accept header `%s`", accept)
+		warningLogger.Printf(msg)
+		http.Error(w, msg, http.StatusBadRequest)
+		return
+	}
+	err := outSerializer.Encode(&convertReview, w)
+	if err != nil {
+		warningLogger.Printf(err.Error())
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+}
+
+func (whsvr *WebhookServer) ServeConvert(w http.ResponseWriter, r *http.Request) {
+	infoLogger.Printf("begin convertin webhook")
+	whsvr.serveConvert(w, r, convertCRD)
 }

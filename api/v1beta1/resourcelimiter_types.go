@@ -55,6 +55,7 @@ type ResourceLimiterStatus struct {
 
 //+kubebuilder:object:root=true
 //+kubebuilder:subresource:status
+//+kubebuilder:storageversion
 //+kubebuilder:resource:scope=Cluster
 
 // ResourceLimiter is the Schema for the resourcelimiters API

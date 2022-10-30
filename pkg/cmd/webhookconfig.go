@@ -16,6 +16,7 @@ var (
 	webhookConfigName   = "resourcelimiter-checker"
 	WebhookMutatePath   = "/mutate"
 	WebhookValidatePath = "/validate"
+	WebhookConvertPath  = "/convert"
 )
 
 func createOrUpdateWebhookConfiguration(clientset *kubernetes.Clientset, caPEM *bytes.Buffer, webhookService, webhookNamespace string, mutate bool) error {
