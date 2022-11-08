@@ -26,3 +26,31 @@ func (src *ResourceLimiter) ConvertTo(dstRaw conversion.Hub) error {
 	dst.Spec.Applied = src.Spec.Applied
 	return nil
 }
+
+// Convert reversely for backward compatibility
+func (dst *ResourceLimiter) ConvertFrom(srcRaw conversion.Hub) error {
+	src, ok := srcRaw.(*v1beta2.ResourceLimiter)
+	if !ok {
+		return errors.New("the dst type is wroong")
+	}
+	dst.Spec.Targets = []ResourceLimiterNamespace{}
+	dst.Spec.Types = map[ResourceLimiterType]string{}
+
+	dst.Spec.Applied = src.Spec.Applied
+
+	// Reply on map key will never be duplicated
+	// And make the last set one as served quotas
+	if len(src.Spec.Quotas) == 0 {
+		return errors.New("the quotas field is 0")
+	}
+
+	for k, v := range src.Spec.Quotas {
+		dst.Spec.Targets = append(dst.Spec.Targets, ResourceLimiterNamespace(k))
+		dst.Spec.Types[ResourceLimiterType("limits.cpu")] = v.CpuLimit
+		dst.Spec.Types[ResourceLimiterType("requests.cpu")] = v.CpuRequest
+		dst.Spec.Types[ResourceLimiterType("limits.memory")] = v.MemLimit
+		dst.Spec.Types[ResourceLimiterType("requests.memory")] = v.MemRequest
+	}
+
+	return nil
+}

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 
+	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	rlv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	"github.com/munnerz/goautoneg"
 	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,9 +15,9 @@ import (
 	"k8s.io/klog"
 )
 
-// convertFunc is the user defined function for any conversion. The code in this file is a
-// template that can be use for any CR conversion given this function.
-type convertFunc func(Object *unstructured.Unstructured, version string) (*unstructured.Unstructured, metav1.Status)
+// // convertFunc is the user defined function for any conversion. The code in this file is a
+// // template that can be use for any CR conversion given this function.
+// type convertFunc func(Object *unstructured.Unstructured, version string) (*unstructured.Unstructured, metav1.Status)
 
 // conversionResponseFailureWithMessagef is a helper function to create an AdmissionResponse
 // with a formatted embedded error message.
@@ -82,24 +84,67 @@ func getOutputSerializer(accept string) runtime.Serializer {
 
 // doConversion converts the requested object given the conversion function and returns a conversion response.
 // failures will be reported as Reason in the conversion response.
-func doConversion(convertRequest *v1beta1.ConversionRequest, convert convertFunc) *v1beta1.ConversionResponse {
+func doConversion(convertRequest *v1beta1.ConversionRequest) *v1beta1.ConversionResponse {
 	var convertedObjects []runtime.RawExtension
-	for _, obj := range convertRequest.Objects {
-		cr := unstructured.Unstructured{}
-		if err := cr.UnmarshalJSON(obj.Raw); err != nil {
-			klog.Error(err)
-			return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
-		}
-		convertedCR, status := convert(&cr, convertRequest.DesiredAPIVersion)
-		if status.Status != metav1.StatusSuccess {
-			klog.Error(status.String())
-			return &v1beta1.ConversionResponse{
-				Result: status,
+	switch convertRequest.DesiredAPIVersion {
+	case "resources.resourcelimiter.io/v1beta2":
+		for _, obj := range convertRequest.Objects {
+			unstructuredCR := &unstructured.Unstructured{}
+			if err := unstructuredCR.UnmarshalJSON(obj.Raw); err != nil {
+				klog.Error(err)
+				return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
 			}
+
+			cr := &rlv1beta1.ResourceLimiter{
+				Spec: rlv1beta1.ResourceLimiterSpec{
+					Targets: unstructuredCR.Object["targets"].([]rlv1beta1.ResourceLimiterNamespace),
+					Types:   unstructuredCR.Object["types"].(map[rlv1beta1.ResourceLimiterType]string),
+					Applied: unstructuredCR.Object["applied"].(bool),
+				},
+			}
+
+			newVer, status := convertV1beta1IntoV1beta2(cr)
+			if status.Status != metav1.StatusSuccess {
+				klog.Error(status.String())
+				return &v1beta1.ConversionResponse{
+					Result: status,
+				}
+			}
+			convertedObjects = append(convertedObjects, runtime.RawExtension{Object: newVer})
+
 		}
-		convertedCR.SetAPIVersion(convertRequest.DesiredAPIVersion)
-		convertedObjects = append(convertedObjects, runtime.RawExtension{Object: convertedCR})
+	case "resources.resourcelimiter.io/v1beta1":
+		for _, obj := range convertRequest.Objects {
+			unstructuredCR := &unstructured.Unstructured{}
+			if err := unstructuredCR.UnmarshalJSON(obj.Raw); err != nil {
+				klog.Error(err)
+				return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
+			}
+
+			cr := &rlv1beta2.ResourceLimiter{
+				Spec: rlv1beta2.ResourceLimiterSpec{
+					Quotas:  unstructuredCR.Object["quotas"].(map[string]rlv1beta2.ResourceLimiterQuota),
+					Applied: unstructuredCR.Object["applied"].(bool),
+				},
+			}
+
+			oldVer, status := convertV1beta2IntoV1beta1(cr)
+			if status.Status != metav1.StatusSuccess {
+				klog.Error(status.String())
+				return &v1beta1.ConversionResponse{
+					Result: status,
+				}
+			}
+			convertedObjects = append(convertedObjects, runtime.RawExtension{Object: oldVer})
+		}
+	default:
+		return &v1beta1.ConversionResponse{
+			ConvertedObjects: convertedObjects,
+			Result:           statusErrorWithMessage("failed to do the conversion"),
+		}
+
 	}
+
 	return &v1beta1.ConversionResponse{
 		ConvertedObjects: convertedObjects,
 		Result:           statusSucceed(),

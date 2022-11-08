@@ -471,7 +471,7 @@ func convertV1beta1IntoV1beta2(oldObject *rlv1beta1.ResourceLimiter) (*rlv1beta2
 	return newObject, statusSucceed()
 }
 
-func convertV1beta2IntoV1beta1(oldObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
+func convertV1beta2IntoV1beta1(newObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
 	infoLogger.Printf("begin converting into v1beta1")
 	fromVersion := "resources.resourcelimiter.io/v1beta2"
 	toVersion := "resources.resourcelimiter.io/v1beta1"
@@ -480,15 +480,15 @@ func convertV1beta2IntoV1beta1(oldObject *rlv1beta2.ResourceLimiter) (*rlv1beta1
 		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
 	}
 
-	newObject := &rlv1beta1.ResourceLimiter{}
+	oldObject := &rlv1beta1.ResourceLimiter{}
 
 	if err := oldObject.ConvertFrom(newObject); err != nil {
 		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
 	}
-	return newObject, statusSucceed()
+	return oldObject, statusSucceed()
 }
 
-func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request, convert convertFunc) {
+func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request) {
 	var body []byte
 	if r.Body != nil {
 		if data, err := ioutil.ReadAll(r.Body); err == nil {
@@ -511,7 +511,7 @@ func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request,
 		warningLogger.Printf(err.Error())
 		convertReview.Response = conversionResponseFailureWithMessagef("failed to deserialize body (%v) with error %v", string(body), err)
 	} else {
-		convertReview.Response = doConversion(convertReview.Request, convert)
+		convertReview.Response = doConversion(convertReview.Request)
 		convertReview.Response.UID = convertReview.Request.UID
 	}
 	infoLogger.Printf(fmt.Sprintf("sending response: %v", convertReview.Response))
@@ -537,5 +537,5 @@ func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request,
 
 func (whsvr *WebhookServer) ServeConvert(w http.ResponseWriter, r *http.Request) {
 	infoLogger.Printf("begin convertin webhook")
-	whsvr.serveConvert(w, r, convertCRD)
+	whsvr.serveConvert(w, r)
 }
