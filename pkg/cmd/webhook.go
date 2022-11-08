@@ -50,7 +50,7 @@ type patchOperation struct {
 }
 
 // Check whether the target resoured need to be mutated
-func mutationRequired(rl *rlv1beta1.ResourceLimiter) (bool, bool) {
+func mutationRequiredV1beta1(rl *rlv1beta1.ResourceLimiter) (bool, bool) {
 	var requiredTypes, requiredTargets bool
 	if len(rl.Spec.Targets) == 0 {
 		requiredTargets = true
@@ -77,7 +77,7 @@ func mutationRequired(rl *rlv1beta1.ResourceLimiter) (bool, bool) {
 	return requiredTypes, requiredTargets
 }
 
-func updateResourceLimiterTypes(added map[rlv1beta1.ResourceLimiterType]string) (patch []patchOperation) {
+func updateResourceLimiterTypesV1beta1(added map[rlv1beta1.ResourceLimiterType]string) (patch []patchOperation) {
 	patch = append(patch, patchOperation{
 		Op:    "add",
 		Path:  "/spec/types",
@@ -86,7 +86,7 @@ func updateResourceLimiterTypes(added map[rlv1beta1.ResourceLimiterType]string) 
 	return patch
 }
 
-func updateResourceLimiterTargets(target []rlv1beta1.ResourceLimiterNamespace, added []rlv1beta1.ResourceLimiterNamespace) (patch []patchOperation) {
+func updateResourceLimiterTargetsV1beta1(target []rlv1beta1.ResourceLimiterNamespace, added []rlv1beta1.ResourceLimiterNamespace) (patch []patchOperation) {
 	for _, item := range added {
 		if len(target) == 0 {
 			target = []rlv1beta1.ResourceLimiterNamespace{}
@@ -109,16 +109,65 @@ func updateResourceLimiterTargets(target []rlv1beta1.ResourceLimiterNamespace, a
 }
 
 // create mutation patch for resoures
-func createPatch(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimiter) ([]byte, error) {
+func createPatchv1beta1(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimiter) ([]byte, error) {
 	var patch []patchOperation
 
-	requiredTypes, requiredTargets := mutationRequired(rl)
+	requiredTypes, requiredTargets := mutationRequiredV1beta1(rl)
 	if requiredTypes {
-		patch = append(patch, updateResourceLimiterTypes(desired.Spec.Types)...)
+		patch = append(patch, updateResourceLimiterTypesV1beta1(desired.Spec.Types)...)
 	}
 
 	if requiredTargets {
-		patch = append(patch, updateResourceLimiterTargets(rl.Spec.Targets, desired.Spec.Targets)...)
+		patch = append(patch, updateResourceLimiterTargetsV1beta1(rl.Spec.Targets, desired.Spec.Targets)...)
+	}
+
+	return json.Marshal(patch)
+}
+
+// Check whether the target resoured need to be mutated
+func mutationRequiredV1beta2(rl *rlv1beta2.ResourceLimiter) map[string]bool {
+
+	if len(rl.Spec.Quotas) == 0 {
+		return map[string]bool{
+			"default": true,
+		}
+	}
+
+	requiredQuotas := map[string]bool{}
+	for k, v := range rl.Spec.Quotas {
+		if v.CpuLimit == "" || v.CpuRequest == "" || v.MemLimit == "" || v.MemRequest == "" {
+			requiredQuotas[k] = true
+		}
+	}
+
+	infoLogger.Printf("Mutation policy for v1beta2/%v required:%v", rl.Name, requiredQuotas)
+	return requiredQuotas
+}
+
+func updateResourceLimiterQuotasV1beta2(added map[string]rlv1beta2.ResourceLimiterQuota) (patch []patchOperation) {
+	patch = append(patch, patchOperation{
+		Op:    "add",
+		Path:  "/spec/targets",
+		Value: added,
+	})
+	return patch
+}
+
+// create mutation patch for resoures
+func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.ResourceLimiter) ([]byte, error) {
+	var patch []patchOperation
+
+	requiredQuotas := mutationRequiredV1beta2(rl)
+	for k, v := range requiredQuotas {
+		if v {
+			patch = append(patch, updateResourceLimiterQuotasV1beta2(map[string]rlv1beta2.ResourceLimiterQuota{
+				k: desired.Spec.Quotas[k],
+			})...)
+		}
+		if _, ok := desired.Spec.Quotas[k]; !ok {
+			desired.Spec.Quotas[k] = rlv1beta2.ResourceLimiterQuota{}
+		}
+
 	}
 
 	return json.Marshal(patch)
@@ -127,43 +176,95 @@ func createPatch(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimit
 // main mutation process
 func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
 	req := ar.Request
-	var rl rlv1beta1.ResourceLimiter
-	if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
-		warningLogger.Printf("Could not unmarshal raw object: %v", err)
-		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Message: err.Error(),
+	switch req.Kind.Version {
+	case "v1beta1":
+		var rl rlv1beta1.ResourceLimiter
+		if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
+			warningLogger.Printf("Could not unmarshal raw object: %v", err)
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
+
+		infoLogger.Printf("Mutate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
+
+		desired := rlv1beta1.ResourceLimiter{
+			Spec: rlv1beta1.ResourceLimiterSpec{
+				Types: map[rlv1beta1.ResourceLimiterType]string{constants.RetrainTypeLimitsCpu: "2", constants.RetrainTypeLimitsMemory: "200Mi",
+					constants.RetrainTypeRequestsCpu: "1", constants.RetrainTypeRequestsMemory: "150Mi"},
+				Targets: []rlv1beta1.ResourceLimiterNamespace{"default"},
 			},
 		}
-	}
+		patchBytes, err := createPatchV1beta1(&rl, &desired)
+		if err != nil {
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
 
-	infoLogger.Printf("Mutate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
-		req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
-
-	desired := rlv1beta1.ResourceLimiter{
-		Spec: rlv1beta1.ResourceLimiterSpec{
-			Types: map[rlv1beta1.ResourceLimiterType]string{constants.RetrainTypeLimitsCpu: "2", constants.RetrainTypeLimitsMemory: "200Mi",
-				constants.RetrainTypeRequestsCpu: "1", constants.RetrainTypeRequestsMemory: "150Mi"},
-			Targets: []rlv1beta1.ResourceLimiterNamespace{"default"},
-		},
-	}
-	patchBytes, err := createPatch(&rl, &desired)
-	if err != nil {
+		infoLogger.Printf("AdmissionResponse: patch=%v\n", string(patchBytes))
 		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Message: err.Error(),
+			Allowed: true,
+			Patch:   patchBytes,
+			PatchType: func() *admissionv1.PatchType {
+				pt := admissionv1.PatchTypeJSONPatch
+				return &pt
+			}(),
+		}
+	case "v1beta2":
+		var rl rlv1beta2.ResourceLimiter
+		if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
+			warningLogger.Printf("Could not unmarshal raw object: %v", err)
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
+
+		infoLogger.Printf("Mutate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
+			req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
+
+		desired := rlv1beta2.ResourceLimiter{
+			Spec: rlv1beta2.ResourceLimiterSpec{
+				Quotas: map[string]rlv1beta2.ResourceLimiterQuota{
+					"default": rlv1beta2.ResourceLimiterQuota{
+						CpuRequest: "1",
+						CpuLimit:   "2",
+						MemRequest: "150Mi",
+						MemLimit:   "200Mi",
+					},
+				},
 			},
 		}
-	}
+		patchBytes, err := createPatchv1beta2(&rl, &desired)
+		if err != nil {
+			return &admissionv1.AdmissionResponse{
+				Result: &metav1.Status{
+					Message: err.Error(),
+				},
+			}
+		}
 
-	infoLogger.Printf("AdmissionResponse: patch=%v\n", string(patchBytes))
+		infoLogger.Printf("AdmissionResponse: patch=%v\n", string(patchBytes))
+		return &admissionv1.AdmissionResponse{
+			Allowed: true,
+			Patch:   patchBytes,
+			PatchType: func() *admissionv1.PatchType {
+				pt := admissionv1.PatchTypeJSONPatch
+				return &pt
+			}(),
+		}
+	}
 	return &admissionv1.AdmissionResponse{
-		Allowed: true,
-		Patch:   patchBytes,
-		PatchType: func() *admissionv1.PatchType {
-			pt := admissionv1.PatchTypeJSONPatch
-			return &pt
-		}(),
+		Result: &metav1.Status{
+			Message: fmt.Sprintf("currently, should not be here"),
+		},
 	}
 }
 
