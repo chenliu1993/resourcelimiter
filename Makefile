@@ -57,7 +57,7 @@ fmt: ## Run go fmt against code.
 vet: ## Run go vet against code.
 	go vet ./...
 
-.PHONY: test
+.PHONY: e2e-test
 test: manifests generate fmt vet envtest ## Run tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v ./... -coverprofile cover.out
 
