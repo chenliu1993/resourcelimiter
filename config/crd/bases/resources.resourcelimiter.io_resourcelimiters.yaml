@@ -74,7 +74,7 @@ spec:
             type: object
         type: object
     served: true
-    storage: true
+    storage: false
     subresources:
       status: {}
   - name: v1beta2
@@ -137,17 +137,6 @@ spec:
             type: object
         type: object
     served: true
-    storage: false
+    storage: true
     subresources:
       status: {}
-    preserveUnknownFields: false
-    conversion:
-      strategy: Webhook
-      webhook:
-        clientConfig:
-          # caBundle: <CA>
-          service:
-            namespace: kube-system
-            name: rl-conversion-webhook
-            path: /conversion
-        
