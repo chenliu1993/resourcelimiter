@@ -73,7 +73,7 @@ func mutationRequiredV1beta1(rl *rlv1beta1.ResourceLimiter) (bool, bool) {
 		requiredTypes = true
 	}
 
-	infoLogger.Printf("Mutation policy for %v required:%v", rl.Name, requiredTypes || requiredTargets)
+	infoLogger.Printf("Mutation policy for v1beta1/%v required:%v", rl.Name, requiredTypes || requiredTargets)
 	return requiredTypes, requiredTargets
 }
 
@@ -109,7 +109,7 @@ func updateResourceLimiterTargetsV1beta1(target []rlv1beta1.ResourceLimiterNames
 }
 
 // create mutation patch for resoures
-func createPatchv1beta1(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimiter) ([]byte, error) {
+func createPatchV1beta1(rl *rlv1beta1.ResourceLimiter, desired *rlv1beta1.ResourceLimiter) ([]byte, error) {
 	var patch []patchOperation
 
 	requiredTypes, requiredTargets := mutationRequiredV1beta1(rl)
@@ -136,6 +136,7 @@ func mutationRequiredV1beta2(rl *rlv1beta2.ResourceLimiter) map[string]bool {
 	requiredQuotas := map[string]bool{}
 	for k, v := range rl.Spec.Quotas {
 		if v.CpuLimit == "" || v.CpuRequest == "" || v.MemLimit == "" || v.MemRequest == "" {
+			// This ns should be mutated
 			requiredQuotas[k] = true
 		}
 	}
@@ -161,15 +162,11 @@ func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.Resour
 	for k, v := range requiredQuotas {
 		if v {
 			patch = append(patch, updateResourceLimiterQuotasV1beta2(map[string]rlv1beta2.ResourceLimiterQuota{
+				// Quotas[k] must exists, because desired is generated from the mutate-needed spec
 				k: desired.Spec.Quotas[k],
 			})...)
 		}
-		if _, ok := desired.Spec.Quotas[k]; !ok {
-			desired.Spec.Quotas[k] = rlv1beta2.ResourceLimiterQuota{}
-		}
-
 	}
-
 	return json.Marshal(patch)
 }
 
@@ -232,17 +229,22 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 
 		desired := rlv1beta2.ResourceLimiter{
 			Spec: rlv1beta2.ResourceLimiterSpec{
-				Quotas: map[string]rlv1beta2.ResourceLimiterQuota{
-					"default": rlv1beta2.ResourceLimiterQuota{
-						CpuRequest: "1",
-						CpuLimit:   "2",
-						MemRequest: "150Mi",
-						MemLimit:   "200Mi",
-					},
-				},
+				Quotas: map[string]rlv1beta2.ResourceLimiterQuota{},
 			},
 		}
-		patchBytes, err := createPatchv1beta2(&rl, &desired)
+
+		for ns := range rl.Spec.Quotas {
+			// We set all to default
+			// TODO maybe later I can try only change the problem field
+			desired.Spec.Quotas[ns] = rlv1beta2.ResourceLimiterQuota{
+				CpuRequest: "1",
+				CpuLimit:   "2",
+				MemRequest: "150Mi",
+				MemLimit:   "200Mi",
+			}
+		}
+
+		patchBytes, err := createPatchV1beta2(&rl, &desired)
 		if err != nil {
 			return &admissionv1.AdmissionResponse{
 				Result: &metav1.Status{
@@ -263,7 +265,7 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 	}
 	return &admissionv1.AdmissionResponse{
 		Result: &metav1.Status{
-			Message: fmt.Sprintf("currently, should not be here"),
+			Message: fmt.Sprintf("Unsupported version %s", req.Kind.Version),
 		},
 	}
 }
@@ -282,33 +284,70 @@ func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admission
 
 	switch req.Kind.Kind {
 	case "ResourceLimiter":
-		var rl rlv1beta1.ResourceLimiter
-		infoLogger.Printf("begin marshal resourcelimiter %s of %s", req.Name, req.Kind.Kind)
-		if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
-			warningLogger.Printf("Could not unmarshal raw object into resourcelimiter, try pod: %v", err)
-			return &admissionv1.AdmissionResponse{
-				Allowed: false,
-				Result: &metav1.Status{
-					Message: err.Error(),
-				},
-			}
-		}
-		infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
-			req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
-		for _, ns := range rl.Spec.Targets {
-			if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+		switch req.Kind.Version {
+		case "v1beta1":
+			var rl rlv1beta1.ResourceLimiter
+			infoLogger.Printf("begin marshal resourcelimiter %s of %s", req.Name, req.Kind.Kind)
+			if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
+				warningLogger.Printf("Could not unmarshal raw object into resourcelimiter, try pod: %v", err)
 				return &admissionv1.AdmissionResponse{
 					Allowed: false,
 					Result: &metav1.Status{
-						Message: "should avoid limit on the preset namespace",
+						Message: err.Error(),
 					},
 				}
 			}
+			infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
+				req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
+			for _, ns := range rl.Spec.Targets {
+				if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+					return &admissionv1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Message: "should avoid limit on the preset namespace",
+						},
+					}
+				}
+			}
+			for t, value := range rl.Spec.Types {
+				warningLogger.Printf(fmt.Sprintf("validating type field %s for %s", t, rl.Name))
+				k8sresource.MustParse(value)
+			}
+		case "v1beta2":
+			var rl rlv1beta2.ResourceLimiter
+			infoLogger.Printf("begin marshal resourcelimiter v1beta2/%s of %s", req.Name, req.Kind.Kind)
+			if err := json.Unmarshal(req.Object.Raw, &rl); err != nil {
+				warningLogger.Printf("Could not unmarshal raw object into resourcelimiter, try pod: %v", err)
+				return &admissionv1.AdmissionResponse{
+					Allowed: false,
+					Result: &metav1.Status{
+						Message: err.Error(),
+					},
+				}
+			}
+			infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
+				req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
+
+			for ns, quota := range rl.Spec.Quotas {
+				if ns == string(constants.IgnoreKubeSystem) || ns == string(constants.IgnoreKubePublic) {
+					return &admissionv1.AdmissionResponse{
+						Allowed: false,
+						Result: &metav1.Status{
+							Message: "should avoid limit on the preset namespace",
+						},
+					}
+				}
+				warningLogger.Printf(fmt.Sprintf("validating quota field CpuLimitfor for %s", rl.Name))
+				k8sresource.MustParse(quota.CpuLimit)
+				warningLogger.Printf(fmt.Sprintf("validating quota field CpuRequest for %s", rl.Name))
+				k8sresource.MustParse(quota.CpuRequest)
+				warningLogger.Printf(fmt.Sprintf("validating quota field MemLimit for %s", rl.Name))
+				k8sresource.MustParse(quota.MemLimit)
+				warningLogger.Printf(fmt.Sprintf("validating quota field MemRequest for %s", rl.Name))
+				k8sresource.MustParse(quota.MemRequest)
+			}
 		}
-		for t, value := range rl.Spec.Types {
-			warningLogger.Printf(fmt.Sprintf("validating type field %s for %s", t, rl.Name))
-			k8sresource.MustParse(value)
-		}
+
 	case "Pod":
 		var pod corev1.Pod
 		infoLogger.Printf("begin marshal pod %s of %s", req.Name, req.Kind.Kind)

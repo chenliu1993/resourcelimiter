@@ -143,9 +143,11 @@ spec:
     preserveUnknownFields: false
     conversion:
       strategy: Webhook
-      webhookClientConfig:
-        caBundle: <CA>
-        service:
-          namespace: kube-system
-          name: rl-conversion-webhook
-          path: /conversion
+      webhook:
+        clientConfig:
+          # caBundle: <CA>
+          service:
+            namespace: kube-system
+            name: rl-conversion-webhook
+            path: /conversion
+        
