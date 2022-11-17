@@ -13,15 +13,16 @@ func (src *ResourceLimiter) ConvertTo(dstRaw conversion.Hub) error {
 	if !ok {
 		return errors.New("the dst type is wroong")
 	}
-	dst.Spec.Quotas = make(map[string]v1beta2.ResourceLimiterQuota, len(src.Spec.Targets))
+	dst.Spec.Quotas = make([]v1beta2.ResourceLimiterQuota, len(src.Spec.Targets))
 	for _, ns := range src.Spec.Targets {
 		newQuota := v1beta2.ResourceLimiterQuota{
-			CpuRequest: src.Spec.Types[ResourceLimiterType("requests.cpu")],
-			CpuLimit:   src.Spec.Types[ResourceLimiterType("limits.cpu")],
-			MemRequest: src.Spec.Types[ResourceLimiterType("requests.memory")],
-			MemLimit:   src.Spec.Types[ResourceLimiterType("limits.memory")],
+			NamespaceName: string(ns),
+			CpuRequest:    src.Spec.Types[ResourceLimiterType("requests.cpu")],
+			CpuLimit:      src.Spec.Types[ResourceLimiterType("limits.cpu")],
+			MemRequest:    src.Spec.Types[ResourceLimiterType("requests.memory")],
+			MemLimit:      src.Spec.Types[ResourceLimiterType("limits.memory")],
 		}
-		dst.Spec.Quotas[string(ns)] = newQuota
+		dst.Spec.Quotas = append(dst.Spec.Quotas, newQuota)
 	}
 	dst.Spec.Applied = src.Spec.Applied
 	return nil
@@ -44,8 +45,8 @@ func (dst *ResourceLimiter) ConvertFrom(srcRaw conversion.Hub) error {
 		return errors.New("the quotas field is 0")
 	}
 
-	for k, v := range src.Spec.Quotas {
-		dst.Spec.Targets = append(dst.Spec.Targets, ResourceLimiterNamespace(k))
+	for _, v := range src.Spec.Quotas {
+		dst.Spec.Targets = append(dst.Spec.Targets, ResourceLimiterNamespace(v.NamespaceName))
 		dst.Spec.Types[ResourceLimiterType("limits.cpu")] = v.CpuLimit
 		dst.Spec.Types[ResourceLimiterType("requests.cpu")] = v.CpuRequest
 		dst.Spec.Types[ResourceLimiterType("limits.memory")] = v.MemLimit

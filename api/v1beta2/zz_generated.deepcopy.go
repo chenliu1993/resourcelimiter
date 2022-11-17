@@ -104,10 +104,8 @@ func (in *ResourceLimiterSpec) DeepCopyInto(out *ResourceLimiterSpec) {
 	*out = *in
 	if in.Quotas != nil {
 		in, out := &in.Quotas, &out.Quotas
-		*out = make(map[string]ResourceLimiterQuota, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
+		*out = make([]ResourceLimiterQuota, len(*in))
+		copy(*out, *in)
 	}
 }
 
@@ -126,10 +124,8 @@ func (in *ResourceLimiterStatus) DeepCopyInto(out *ResourceLimiterStatus) {
 	*out = *in
 	if in.Quotas != nil {
 		in, out := &in.Quotas, &out.Quotas
-		*out = make(map[string]ResourceLimiterQuota, len(*in))
-		for key, val := range *in {
-			(*out)[key] = val
-		}
+		*out = make([]ResourceLimiterQuota, len(*in))
+		copy(*out, *in)
 	}
 }
 

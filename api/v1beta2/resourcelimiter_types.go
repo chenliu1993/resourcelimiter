@@ -28,15 +28,16 @@ type ResourceLimiterSpec struct {
 	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	Quotas  map[string]ResourceLimiterQuota `json:"targets,omitempty"`
-	Applied bool                            `json:"applied,omitempty"`
+	Quotas  []ResourceLimiterQuota `json:"targets,omitempty"`
+	Applied bool                   `json:"applied,omitempty"`
 }
 
 type ResourceLimiterQuota struct {
-	CpuRequest string `json:"cpu_requests,omitempty"`
-	MemRequest string `json:"mem_requests,omitempty"`
-	CpuLimit   string `json:"cpu_limits,omitempty"`
-	MemLimit   string `json:"mem_limits,omitempty"`
+	NamespaceName string `json:"name"`
+	CpuRequest    string `json:"cpu_requests,omitempty"`
+	MemRequest    string `json:"mem_requests,omitempty"`
+	CpuLimit      string `json:"cpu_limits,omitempty"`
+	MemLimit      string `json:"mem_limits,omitempty"`
 }
 
 // ResourceLimiterStatus defines the observed state of ResourceLimiter
@@ -44,8 +45,8 @@ type ResourceLimiterStatus struct {
 	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
 	// Important: Run "make" to regenerate code after modifying this file
 
-	State  string                          `json:"state"`
-	Quotas map[string]ResourceLimiterQuota `json:"quotas"`
+	State  string                 `json:"state"`
+	Quotas []ResourceLimiterQuota `json:"quotas"`
 }
 
 //+kubebuilder:object:root=true

@@ -73,8 +73,8 @@ spec:
             - state
             type: object
         type: object
-    served: true
-    storage: false
+    served: false
+    storage: true
     subresources:
       status: {}
   - name: v1beta2
@@ -100,7 +100,7 @@ spec:
               applied:
                 type: boolean
               targets:
-                additionalProperties:
+                items:
                   properties:
                     cpu_limits:
                       type: string
@@ -110,14 +110,18 @@ spec:
                       type: string
                     mem_requests:
                       type: string
+                    name:
+                      type: string
+                  required:
+                  - name
                   type: object
-                type: object
+                type: array
             type: object
           status:
             description: ResourceLimiterStatus defines the observed state of ResourceLimiter
             properties:
               quotas:
-                additionalProperties:
+                items:
                   properties:
                     cpu_limits:
                       type: string
@@ -127,8 +131,12 @@ spec:
                       type: string
                     mem_requests:
                       type: string
+                    name:
+                      type: string
+                  required:
+                  - name
                   type: object
-                type: object
+                type: array
               state:
                 type: string
             required:
@@ -137,6 +145,6 @@ spec:
             type: object
         type: object
     served: true
-    storage: true
+    storage: false
     subresources:
       status: {}

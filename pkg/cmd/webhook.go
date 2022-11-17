@@ -134,10 +134,10 @@ func mutationRequiredV1beta2(rl *rlv1beta2.ResourceLimiter) map[string]bool {
 	}
 
 	requiredQuotas := map[string]bool{}
-	for k, v := range rl.Spec.Quotas {
+	for _, v := range rl.Spec.Quotas {
 		if v.CpuLimit == "" || v.CpuRequest == "" || v.MemLimit == "" || v.MemRequest == "" {
 			// This ns should be mutated
-			requiredQuotas[k] = true
+			requiredQuotas[v.NamespaceName] = true
 		}
 	}
 
@@ -145,12 +145,25 @@ func mutationRequiredV1beta2(rl *rlv1beta2.ResourceLimiter) map[string]bool {
 	return requiredQuotas
 }
 
-func updateResourceLimiterQuotasV1beta2(added map[string]rlv1beta2.ResourceLimiterQuota) (patch []patchOperation) {
-	patch = append(patch, patchOperation{
-		Op:    "add",
-		Path:  "/spec/targets",
-		Value: added,
-	})
+func updateResourceLimiterQuotasV1beta2(target, added []rlv1beta2.ResourceLimiterQuota) (patch []patchOperation) {
+	for _, item := range added {
+		if len(target) == 0 {
+			target = []rlv1beta2.ResourceLimiterQuota{}
+			patch = append(patch, patchOperation{
+				Op:   "add",
+				Path: "/spec/targets",
+				Value: []rlv1beta2.ResourceLimiterQuota{
+					item,
+				},
+			})
+		} else {
+			patch = append(patch, patchOperation{
+				Op:    "add",
+				Path:  "/spec/targets/-",
+				Value: item,
+			})
+		}
+	}
 	return patch
 }
 
@@ -159,12 +172,15 @@ func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.Resour
 	var patch []patchOperation
 
 	requiredQuotas := mutationRequiredV1beta2(rl)
+	// TODO: better  find
 	for k, v := range requiredQuotas {
-		if v {
-			patch = append(patch, updateResourceLimiterQuotasV1beta2(map[string]rlv1beta2.ResourceLimiterQuota{
-				// Quotas[k] must exists, because desired is generated from the mutate-needed spec
-				k: desired.Spec.Quotas[k],
-			})...)
+		for _, quota := range desired.Spec.Quotas {
+			if v && k == quota.NamespaceName {
+				patch = append(patch, updateResourceLimiterQuotasV1beta2(rl.Spec.Quotas, []rlv1beta2.ResourceLimiterQuota{
+					// Quotas.NamespaceName must exists, because desired is generated from the mutate-needed spec
+					quota,
+				})...)
+			}
 		}
 	}
 	return json.Marshal(patch)
@@ -229,7 +245,7 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 
 		desired := rlv1beta2.ResourceLimiter{
 			Spec: rlv1beta2.ResourceLimiterSpec{
-				Quotas: map[string]rlv1beta2.ResourceLimiterQuota{},
+				Quotas: []rlv1beta2.ResourceLimiterQuota{},
 			},
 		}
 
@@ -328,8 +344,8 @@ func (whsvr *WebhookServer) validate(ar *admissionv1.AdmissionReview) *admission
 			infoLogger.Printf("Validate AdmissionReview for Kind=%v, Namespace=%v Name=%v (%v) UID=%v patchOperation=%v UserInfo=%v",
 				req.Kind, req.Namespace, req.Name, rl.Name, req.UID, req.Operation, req.UserInfo)
 
-			for ns, quota := range rl.Spec.Quotas {
-				if ns == string(constants.IgnoreKubeSystem) || ns == string(constants.IgnoreKubePublic) {
+			for _, quota := range rl.Spec.Quotas {
+				if quota.NamespaceName == string(constants.IgnoreKubeSystem) || quota.NamespaceName == string(constants.IgnoreKubePublic) {
 					return &admissionv1.AdmissionResponse{
 						Allowed: false,
 						Result: &metav1.Status{

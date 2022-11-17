@@ -316,7 +316,7 @@ func doConversion(convertRequest *v1beta1.ConversionRequest) *v1beta1.Conversion
 
 			cr := &rlv1beta2.ResourceLimiter{
 				Spec: rlv1beta2.ResourceLimiterSpec{
-					Quotas:  unstructuredCR.Object["quotas"].(map[string]rlv1beta2.ResourceLimiterQuota),
+					Quotas:  unstructuredCR.Object["quotas"].([]rlv1beta2.ResourceLimiterQuota),
 					Applied: unstructuredCR.Object["applied"].(bool),
 				},
 			}
