@@ -1,7 +1,7 @@
 apiVersion: resources.resourcelimiter.io/v1beta1
 kind: ResourceLimiter
 metadata:
-  name: resourcelimiter-sample-fixtures
+  name: resourcelimiter-sample-fixtures-v1beta1
 spec:
   targets: 
   - default

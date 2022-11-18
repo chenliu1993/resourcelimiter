@@ -25,6 +25,7 @@ func (src *ResourceLimiter) ConvertTo(dstRaw conversion.Hub) error {
 		dst.Spec.Quotas = append(dst.Spec.Quotas, newQuota)
 	}
 	dst.Spec.Applied = src.Spec.Applied
+	dst.ObjectMeta.Name = src.ObjectMeta.Name
 	return nil
 }
 
