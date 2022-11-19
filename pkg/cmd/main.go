@@ -118,7 +118,7 @@ func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc(WebhookMutatePath, whsvr.ServeMutate)
 	mux.HandleFunc(WebhookValidatePath, whsvr.ServeValidate)
-	// mux.HandleFunc(WebhookConvertPath, whsvr.ServeConvert)
+	mux.HandleFunc(WebhookConvertPath, whsvr.ServeConvert)
 	whsvr.server.Handler = mux
 
 	// start webhook server in new rountine
