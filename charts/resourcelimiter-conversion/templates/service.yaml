@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: rl-converter
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "resourcelimiter-converter.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: 443
+      targetPort: {{ .Values.service.webhookPort }}
+      protocol: TCP
+      name: https
+  selector:
+    {{- include "resourcelimiter-converter.svcLabels" . | nindent 4 }}
+
+

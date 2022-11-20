@@ -13,7 +13,6 @@ import (
 	admissionv1 "k8s.io/api/admission/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/apiextensions-apiserver/pkg/apis/apiextensions/v1beta1"
 	k8sresource "k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -186,44 +185,44 @@ func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.Resour
 	return json.Marshal(patch)
 }
 
-func setDesired(rl *rlv1beta2.ResourceLimiter) *admissionv1.AdmissionResponse {
-	desired := rlv1beta2.ResourceLimiter{
-		Spec: rlv1beta2.ResourceLimiterSpec{
-			Quotas: []rlv1beta2.ResourceLimiterQuota{},
-		},
-	}
+// func setDesired(rl *rlv1beta2.ResourceLimiter) *admissionv1.AdmissionResponse {
+// 	desired := rlv1beta2.ResourceLimiter{
+// 		Spec: rlv1beta2.ResourceLimiterSpec{
+// 			Quotas: []rlv1beta2.ResourceLimiterQuota{},
+// 		},
+// 	}
 
-	for _, item := range rl.Spec.Quotas {
-		// We set all to default
-		// TODO maybe later I can try only change the problem field
-		desired.Spec.Quotas = append(desired.Spec.Quotas, rlv1beta2.ResourceLimiterQuota{
-			NamespaceName: item.NamespaceName,
-			CpuRequest:    "1",
-			CpuLimit:      "2",
-			MemRequest:    "150Mi",
-			MemLimit:      "200Mi",
-		})
-	}
+// 	for _, item := range rl.Spec.Quotas {
+// 		// We set all to default
+// 		// TODO maybe later I can try only change the problem field
+// 		desired.Spec.Quotas = append(desired.Spec.Quotas, rlv1beta2.ResourceLimiterQuota{
+// 			NamespaceName: item.NamespaceName,
+// 			CpuRequest:    "1",
+// 			CpuLimit:      "2",
+// 			MemRequest:    "150Mi",
+// 			MemLimit:      "200Mi",
+// 		})
+// 	}
 
-	patchBytes, err := createPatchV1beta2(rl, &desired)
-	if err != nil {
-		return &admissionv1.AdmissionResponse{
-			Result: &metav1.Status{
-				Message: err.Error(),
-			},
-		}
-	}
+// 	patchBytes, err := createPatchV1beta2(rl, &desired)
+// 	if err != nil {
+// 		return &admissionv1.AdmissionResponse{
+// 			Result: &metav1.Status{
+// 				Message: err.Error(),
+// 			},
+// 		}
+// 	}
 
-	infoLogger.Printf("AdmissionResponse: patch=%v\n", string(patchBytes))
-	return &admissionv1.AdmissionResponse{
-		Allowed: true,
-		Patch:   patchBytes,
-		PatchType: func() *admissionv1.PatchType {
-			pt := admissionv1.PatchTypeJSONPatch
-			return &pt
-		}(),
-	}
-}
+// 	infoLogger.Printf("AdmissionResponse: patch=%v\n", string(patchBytes))
+// 	return &admissionv1.AdmissionResponse{
+// 		Allowed: true,
+// 		Patch:   patchBytes,
+// 		PatchType: func() *admissionv1.PatchType {
+// 			pt := admissionv1.PatchTypeJSONPatch
+// 			return &pt
+// 		}(),
+// 	}
+// }
 
 // main mutation process
 func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1.AdmissionResponse {
@@ -288,15 +287,16 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 			},
 		}
 
-		for ns := range rl.Spec.Quotas {
+		for _, item := range rl.Spec.Quotas {
 			// We set all to default
 			// TODO maybe later I can try only change the problem field
-			desired.Spec.Quotas[ns] = rlv1beta2.ResourceLimiterQuota{
-				CpuRequest: "1",
-				CpuLimit:   "2",
-				MemRequest: "150Mi",
-				MemLimit:   "200Mi",
-			}
+			desired.Spec.Quotas = append(desired.Spec.Quotas, rlv1beta2.ResourceLimiterQuota{
+				NamespaceName: item.NamespaceName,
+				CpuRequest:    "1",
+				CpuLimit:      "2",
+				MemRequest:    "150Mi",
+				MemLimit:      "200Mi",
+			})
 		}
 
 		patchBytes, err := createPatchV1beta2(&rl, &desired)
@@ -647,90 +647,4 @@ func (whsvr *WebhookServer) ServeValidate(w http.ResponseWriter, r *http.Request
 		warningLogger.Printf("Can't write response: %v", err)
 		http.Error(w, fmt.Sprintf("could not write response: %v", err), http.StatusInternalServerError)
 	}
-}
-
-func convertV1beta1IntoV1beta2(oldObject *rlv1beta1.ResourceLimiter) (*rlv1beta2.ResourceLimiter, metav1.Status) {
-	infoLogger.Printf("begin converting into v1beta2")
-	fromVersion := "resources.resourcelimiter.io/v1beta1"
-	toVersion := "resources.resourcelimiter.io/v1beta2"
-
-	if toVersion == fromVersion {
-		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
-	}
-
-	newObject := &rlv1beta2.ResourceLimiter{}
-
-	if err := oldObject.ConvertTo(newObject); err != nil {
-		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
-	}
-	return newObject, statusSucceed()
-}
-
-func convertV1beta2IntoV1beta1(newObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
-	infoLogger.Printf("begin converting into v1beta1")
-	fromVersion := "resources.resourcelimiter.io/v1beta2"
-	toVersion := "resources.resourcelimiter.io/v1beta1"
-
-	if toVersion == fromVersion {
-		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
-	}
-
-	oldObject := &rlv1beta1.ResourceLimiter{}
-
-	if err := oldObject.ConvertFrom(newObject); err != nil {
-		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
-	}
-	return oldObject, statusSucceed()
-}
-
-func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request) {
-	var body []byte
-	if r.Body != nil {
-		if data, err := ioutil.ReadAll(r.Body); err == nil {
-			body = data
-		}
-	}
-
-	contentType := r.Header.Get("Content-Type")
-	serializer := getInputSerializer(contentType)
-	if serializer == nil {
-		msg := fmt.Sprintf("invalid Content-Type header `%s`", contentType)
-		warningLogger.Printf(msg)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-
-	infoLogger.Printf("handling request: %v", body)
-	convertReview := v1beta1.ConversionReview{}
-	if _, _, err := serializer.Decode(body, nil, &convertReview); err != nil {
-		warningLogger.Printf(err.Error())
-		convertReview.Response = conversionResponseFailureWithMessagef("failed to deserialize body (%v) with error %v", string(body), err)
-	} else {
-		convertReview.Response = doConversion(convertReview.Request)
-		convertReview.Response.UID = convertReview.Request.UID
-	}
-	infoLogger.Printf(fmt.Sprintf("sending response: %v", convertReview.Response))
-
-	// reset the request, it is not needed in a response.
-	convertReview.Request = &v1beta1.ConversionRequest{}
-
-	accept := r.Header.Get("Accept")
-	outSerializer := getOutputSerializer(accept)
-	if outSerializer == nil {
-		msg := fmt.Sprintf("invalid accept header `%s`", accept)
-		warningLogger.Printf(msg)
-		http.Error(w, msg, http.StatusBadRequest)
-		return
-	}
-	err := outSerializer.Encode(&convertReview, w)
-	if err != nil {
-		warningLogger.Printf(err.Error())
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
-}
-
-func (whsvr *WebhookServer) ServeConvert(w http.ResponseWriter, r *http.Request) {
-	infoLogger.Printf("begin convertin webhook")
-	whsvr.serveConvert(w, r)
 }

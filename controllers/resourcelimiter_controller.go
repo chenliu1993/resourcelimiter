@@ -289,7 +289,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta2
 				resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
 				setHard(resourceQuota, quota)
 				rlquotas = append(rlquotas, rlv1beta2.ResourceLimiterQuota{
-					NamespaceName: fmt.Sprintf("rl-quota-%s", quota.NamespaceName),
+					NamespaceName: resourceQuota.Name,
 					CpuLimit:      fmt.Sprintf("%s/%s", curCpuLimits.String(), quota.CpuLimit),
 					CpuRequest:    fmt.Sprintf("%s/%s", curCpuRequests.String(), quota.CpuRequest),
 					MemLimit:      fmt.Sprintf("%s/%s", curMemLimits.String(), quota.MemLimit),
@@ -330,7 +330,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta2
 func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta2.ResourceLimiter, status rlv1beta2.ResourceLimiterStatus) error {
 	rl.Status.State = status.State
 	// We do a full-update
-	rl.Status.Quotas = make([]rlv1beta2.ResourceLimiterQuota, len(status.Quotas))
+	rl.Status.Quotas = []rlv1beta2.ResourceLimiterQuota{}
 	rl.Status.Quotas = append(rl.Status.Quotas, status.Quotas...)
 	return r.Status().Update(ctx, rl.DeepCopy())
 }

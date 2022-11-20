@@ -7,6 +7,7 @@ GITCOMMIT ?= $(shell git rev-parse --short HEAD)
 # IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1-$(GITCOMMIT)
 IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.2
 CHECKERIMG ?= www.cliufreever.com/library/resourcelimiter-checker:v0.0.2
+CONVERTERIMG ?= www.cliufreever.com/library/resourcelimiter-converter:v0.0.2
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -80,6 +81,13 @@ docker-build: ## Build docker image with the manager.
 docker-checker-build:  ## Build docker image with the checker.
 	docker build -t ${CHECKERIMG} -f Dockerfile.checker .
 
+.PHONY: docker-converter-build
+docker-converter-build:  ## Build docker image with the checker.
+	docker build -t ${CONVERTERIMG} -f Dockerfile.converter .
+
+.PHONY: docker-all-build
+docker-all-build: docker-build docker-checker-build docker-converter-build ## build all components
+
 .PHONY: docker-push
 docker-push: ## Push docker image with the manager.
 	docker push ${IMG}
@@ -87,6 +95,13 @@ docker-push: ## Push docker image with the manager.
 .PHONY: docker-checker-push
 docker-checker-push: ## Push docker image with the manager.
 	docker push ${CHECKERIMG}
+
+.PHONY: docker-converter-push
+docker-converter-push: ## Push docker image with the manager.
+	docker push ${CONVERTERIMG}
+
+.PHONY: docker-all-push
+docker-all-push: docker-push docker-checker-push docker-converter-push ## push all components
 
 ##@ Deployment
 
