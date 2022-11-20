@@ -30,7 +30,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	"sigs.k8s.io/controller-runtime/pkg/source"
 
-	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	rlv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	"github.com/chenliu1993/resourcelimiter/pkg/constants"
 	"github.com/go-logr/logr"
 	corev1 "k8s.io/api/core/v1"
@@ -70,7 +70,7 @@ func eventPredicate() predicate.Predicate {
 func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
-	rl := rlv1beta1.ResourceLimiter{}
+	rl := rlv1beta2.ResourceLimiter{}
 	if err := r.Get(ctx, req.NamespacedName, &rl); err != nil {
 		// return ctrl.Result{Requeue: true}, client.IgnoreNotFound(err)
 		return ctrl.Result{}, err
@@ -103,18 +103,18 @@ func (r *ResourceLimiterReconciler) Reconcile(ctx context.Context, req ctrl.Requ
 func (r *ResourceLimiterReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		WithOptions(ctrlcontroller.Options{MaxConcurrentReconciles: concurrentWorkers}).
-		For(&rlv1beta1.ResourceLimiter{}).
+		For(&rlv1beta2.ResourceLimiter{}).
 		Watches(
 			&source.Kind{Type: &corev1.ResourceQuota{}},
 			&handler.EnqueueRequestForOwner{
 				IsController: true,
-				OwnerType:    &rlv1beta1.ResourceLimiter{},
+				OwnerType:    &rlv1beta2.ResourceLimiter{},
 			}).
 		WithEventFilter(eventPredicate()).
 		Complete(r)
 }
 
-func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv1beta1.ResourceLimiter) (ctrl.Result, error) {
+func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv1beta2.ResourceLimiter) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 	if !controllerutil.ContainsFinalizer(rl, constants.DefaultFinalizer) {
 		return ctrl.Result{}, fmt.Errorf(fmt.Sprintf("no finalizer found on %s resourcelimiter CR", rl.Name))
@@ -129,52 +129,50 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 	)
 
 	if rl.Status.State != constants.Stopped {
-		for idx, ns := range rl.Spec.Targets {
+		for _, quota := range rl.Spec.Quotas {
 			// Check if namespace exists
-			namespacedName = k8stypes.NamespacedName{Namespace: "", Name: string(ns)}
+			namespacedName = k8stypes.NamespacedName{Namespace: "", Name: quota.NamespaceName}
 			if err := r.Get(ctx, namespacedName, &namespace); err != nil {
 				if apierrors.IsNotFound(err) {
-					log.WithName("ResourceLimiter").Info(fmt.Sprintf("namespace %s not found, continue deleting", string(ns)))
+					log.WithName("ResourceLimiter").Info(fmt.Sprintf("namespace %s not found, continue deleting", quota.NamespaceName))
 					continue
 				}
 				return ctrl.Result{}, err
 			}
 
-			namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: fmt.Sprintf("rl-%s-%d", string(ns), idx)}
+			namespacedName = k8stypes.NamespacedName{Namespace: quota.NamespaceName, Name: fmt.Sprintf("rl-quota-%s", quota.NamespaceName)}
 			resourceQuota = corev1.ResourceQuota{}
 			if err := r.Get(ctx, namespacedName, &resourceQuota); err != nil {
 				return ctrl.Result{}, err
 			}
 
 			if err := r.Delete(ctx, &resourceQuota); err != nil {
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("unable to delete quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("unable to delete quota %s", fmt.Sprintf("rl-quota-%s", quota.NamespaceName)))
 				return ctrl.Result{}, err
 			}
-			log.WithName("ResourceLimiter").Info(fmt.Sprintf("resource quota %s deleted", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
-		}
-	}
+			log.WithName("ResourceLimiter").Info(fmt.Sprintf("resource quota %s deleted", fmt.Sprintf("rl-quota-%s", quota.NamespaceName)))
 
-	for _, old := range rl.Spec.Targets {
-		namespacedName = k8stypes.NamespacedName{Namespace: string(old), Name: string(old)}
-		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
-			if apierrors.IsNotFound(err) {
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: namespace %s for resource quota not found, please create it first", string(old)))
-			} else {
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: get namespace %s for resource quota failed", string(old)))
+			// Remove mutate and validate labels for namespace
+			namespacedName = k8stypes.NamespacedName{Namespace: quota.NamespaceName, Name: quota.NamespaceName}
+			if err := r.Get(ctx, namespacedName, &namespace); err != nil {
+				if apierrors.IsNotFound(err) {
+					log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: namespace %s for resource quota not found, please create it first", quota.NamespaceName))
+				} else {
+					log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("remove: get namespace %s for resource quota failed", quota.NamespaceName))
+				}
+				return ctrl.Result{}, err
 			}
-			return ctrl.Result{}, err
-		}
-
-		newNamespace := namespace.DeepCopy()
-		for k, _ := range namespace.GetLabels() {
-			if k == constants.MutateNamespaceLabel || k == constants.ValidateNamespaceLabel {
-				delete(newNamespace.Labels, k)
+			newNamespace := namespace.DeepCopy()
+			for k := range namespace.GetLabels() {
+				if k == constants.MutateNamespaceLabel || k == constants.ValidateNamespaceLabel {
+					delete(newNamespace.Labels, k)
+				}
 			}
-		}
-		log.WithName("ResourceLimiter").Info(fmt.Sprintf("remove labels for namespace %s", string(old)))
-		if err := r.Update(ctx, newNamespace); err != nil {
-			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", string(old)))
-			return ctrl.Result{}, err
+			log.WithName("ResourceLimiter").Info(fmt.Sprintf("remove labels for namespace %s", quota.NamespaceName))
+			if err := r.Update(ctx, newNamespace); err != nil {
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", quota.NamespaceName))
+				return ctrl.Result{}, err
+			}
 		}
 	}
 
@@ -189,41 +187,42 @@ func (r *ResourceLimiterReconciler) reconcileDelete(ctx context.Context, rl *rlv
 	return ctrl.Result{}, nil
 }
 
-func setHard(resourceQuota *corev1.ResourceQuota, types map[rlv1beta1.ResourceLimiterType]string) {
-	resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(types[constants.RetrainTypeLimitsCpu])
-	resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(types[constants.RetrainTypeRequestsCpu])
-	resourceQuota.Spec.Hard[corev1.ResourceLimitsMemory] = k8sresource.MustParse(types[constants.RetrainTypeLimitsMemory])
-	resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(types[constants.RetrainTypeRequestsMemory])
+func setHard(resourceQuota *corev1.ResourceQuota, quota rlv1beta2.ResourceLimiterQuota) {
+	resourceQuota.Spec.Hard[corev1.ResourceLimitsCPU] = k8sresource.MustParse(quota.CpuLimit)
+	resourceQuota.Spec.Hard[corev1.ResourceRequestsCPU] = k8sresource.MustParse(quota.CpuRequest)
+	resourceQuota.Spec.Hard[corev1.ResourceLimitsMemory] = k8sresource.MustParse(quota.MemLimit)
+	resourceQuota.Spec.Hard[corev1.ResourceRequestsMemory] = k8sresource.MustParse(quota.MemRequest)
 }
 
-func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1.ResourceLimiter) (ctrl.Result, error) {
+func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta2.ResourceLimiter) (ctrl.Result, error) {
 	log := ctrl.LoggerFrom(ctx)
 
 	// Create ResourceQuota per namespace
 	var (
-		namespace                                                      corev1.Namespace
-		namespacedName                                                 k8stypes.NamespacedName
-		resourceQuota                                                  = &corev1.ResourceQuota{}
-		rlquotas                                                       = map[string]rlv1beta1.ResourceLimiterQuotas{}
-		curCpuLimits, curCpuRequests, curMemLimits, curMemRequests     k8sresource.Quantity
-		nextCpuLimits, nextCpuRequests, nextMemLimits, nextMemRequests k8sresource.Quantity
+		namespace                                                  corev1.Namespace
+		namespacedName                                             k8stypes.NamespacedName
+		resourceQuota                                              = &corev1.ResourceQuota{}
+		rlquotas                                                   = []rlv1beta2.ResourceLimiterQuota{}
+		curCpuLimits, curCpuRequests, curMemLimits, curMemRequests k8sresource.Quantity
+		// nextCpuLimits, nextCpuRequests, nextMemLimits, nextMemRequests k8sresource.Quantity
 	)
 
-	for idx, ns := range rl.Spec.Targets {
-		if ns == constants.IgnoreKubeSystem || ns == constants.IgnoreKubePublic {
+	for _, quota := range rl.Spec.Quotas {
+		if quota.NamespaceName == string(constants.IgnoreKubeSystem) || quota.NamespaceName == string(constants.IgnoreKubePublic) {
 			continue
 		}
 		// Make sure namespace exists and label it with checker label
-		namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: string(ns)}
+		namespacedName = k8stypes.NamespacedName{Namespace: quota.NamespaceName, Name: quota.NamespaceName}
 		if err := r.Get(ctx, namespacedName, &namespace); err != nil {
 			if apierrors.IsNotFound(err) {
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s for resource quota not found, please create it first", string(ns)))
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s for resource quota not found, please create it first", string(quota.NamespaceName)))
 			} else {
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get namespace %s for resource quota failed", string(ns)))
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get namespace %s for resource quota failed", quota.NamespaceName))
 			}
 			return ctrl.Result{}, err
 		}
 
+		// Set mutate and validate label for namespace if not presesnt
 		newNamespace := namespace.DeepCopy()
 		if len(newNamespace.Labels) == 0 {
 			newNamespace.Labels = map[string]string{}
@@ -235,39 +234,40 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 			newNamespace.Labels[constants.ValidateNamespaceLabel] = "enabled"
 		}
 
-		log.WithName("ResourceLimiter").Info(fmt.Sprintf("set labels for namespace %s", string(ns)))
+		log.WithName("ResourceLimiter").Info(fmt.Sprintf("set labels for namespace %s", quota.NamespaceName))
 		if err := r.Update(ctx, newNamespace); err != nil {
-			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", string(ns)))
+			log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("namespace %s label failed", quota.NamespaceName))
 			return ctrl.Result{}, err
 		}
 
 		// Generate target resource quota spec
 		resourceQuota = &corev1.ResourceQuota{}
 		if rl.Spec.Applied {
-			nextCpuLimits = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsCpu])
-			nextCpuRequests = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsCpu])
-			nextMemLimits = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeLimitsMemory])
-			nextMemRequests = k8sresource.MustParse(rl.Spec.Types[constants.RetrainTypeRequestsMemory])
-			namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: fmt.Sprintf("rl-%s-%d", string(ns), idx)}
-			log.WithName("ResourceLimiter").Info(fmt.Sprintf("create or update the resource quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
+			// nextCpuLimits = k8sresource.MustParse(quota.CpuLimit)
+			// nextCpuRequests = k8sresource.MustParse(quota.CpuRequest)
+			// nextMemLimits = k8sresource.MustParse(quota.MemLimit)
+			// nextMemRequests = k8sresource.MustParse(quota.MemRequest)
+			namespacedName = k8stypes.NamespacedName{Namespace: quota.NamespaceName, Name: fmt.Sprintf("rl-quota-%s", quota.NamespaceName)}
+			log.WithName("ResourceLimiter").Info(fmt.Sprintf("create or update the resource quota %s", fmt.Sprintf("rl-quota-%s", quota.NamespaceName)))
 			if err := r.Get(ctx, namespacedName, resourceQuota); err != nil {
 				if apierrors.IsNotFound(err) {
-					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
-					resourceQuota.Name = fmt.Sprintf("rl-%s-%d", string(ns), idx)
-					resourceQuota.Namespace = string(ns)
+					log.WithName("ResourceLimiter").Info(fmt.Sprintf("create resource quota %s", fmt.Sprintf("rl-quota-%s", quota.NamespaceName)))
+					resourceQuota.Name = fmt.Sprintf("rl-quota-%s", quota.NamespaceName)
+					resourceQuota.Namespace = quota.NamespaceName
 					if err := controllerutil.SetControllerReference(rl, resourceQuota, r.Scheme); err != nil {
 						log.WithName("ResourceLimiter").Error(err, "Set ResourceLimiter as the owner and controller")
 						return ctrl.Result{}, err
 					}
 					resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
-					setHard(resourceQuota, rl.Spec.Types)
-					rlquotas[fmt.Sprintf("rl-%s-%d", string(ns), idx)] = rlv1beta1.ResourceLimiterQuotas{
-						Namespace:   string(ns),
-						CpuLimits:   fmt.Sprintf("0/%s", nextCpuLimits.String()),
-						CpuRequests: fmt.Sprintf("0/%s", nextCpuRequests.String()),
-						MemLimits:   fmt.Sprintf("0/%s", nextMemLimits.String()),
-						MemRequests: fmt.Sprintf("0/%s", nextMemRequests.String()),
-					}
+					setHard(resourceQuota, quota)
+
+					rlquotas = append(rlquotas, rlv1beta2.ResourceLimiterQuota{
+						NamespaceName: fmt.Sprintf("rl-quota-%s", quota.NamespaceName),
+						CpuLimit:      fmt.Sprintf("0/%s", quota.CpuLimit),
+						CpuRequest:    fmt.Sprintf("0/%s", quota.CpuRequest),
+						MemLimit:      fmt.Sprintf("0/%s", quota.MemLimit),
+						MemRequest:    fmt.Sprintf("0/%s", quota.MemRequest),
+					})
 					if er := r.Create(ctx, resourceQuota); er != nil {
 						log.WithName("ResourceLimiter").Error(er, fmt.Sprintf("create the quopta %s failed", resourceQuota.Name))
 						return ctrl.Result{}, er
@@ -278,7 +278,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 					//}
 					return ctrl.Result{}, nil
 				}
-				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get the quota %s failed", fmt.Sprintf("rl-%s-%d", string(ns), idx)))
+				log.WithName("ResourceLimiter").Error(err, fmt.Sprintf("get the quota %s failed", fmt.Sprintf("rl-quota-%s", quota.NamespaceName)))
 				return ctrl.Result{}, err
 			} else {
 				currl := resourceQuota.DeepCopy()
@@ -287,14 +287,14 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 				curMemLimits = currl.Status.Used[corev1.ResourceName(constants.RetrainTypeLimitsMemory)]
 				curMemRequests = currl.Status.Used[corev1.ResourceName(constants.RetrainTypeRequestsMemory)]
 				resourceQuota.Spec.Hard = map[corev1.ResourceName]k8sresource.Quantity{}
-				setHard(resourceQuota, rl.Spec.Types)
-				rlquotas[fmt.Sprintf("rl-%s-%d", string(ns), idx)] = rlv1beta1.ResourceLimiterQuotas{
-					Namespace:   string(ns),
-					CpuLimits:   fmt.Sprintf("%s/%s", curCpuLimits.String(), nextCpuLimits.String()),
-					CpuRequests: fmt.Sprintf("%s/%s", curCpuRequests.String(), nextCpuRequests.String()),
-					MemLimits:   fmt.Sprintf("%s/%s", curMemLimits.String(), nextMemLimits.String()),
-					MemRequests: fmt.Sprintf("%s/%s", curMemRequests.String(), nextMemRequests.String()),
-				}
+				setHard(resourceQuota, quota)
+				rlquotas = append(rlquotas, rlv1beta2.ResourceLimiterQuota{
+					NamespaceName: resourceQuota.Name,
+					CpuLimit:      fmt.Sprintf("%s/%s", curCpuLimits.String(), quota.CpuLimit),
+					CpuRequest:    fmt.Sprintf("%s/%s", curCpuRequests.String(), quota.CpuRequest),
+					MemLimit:      fmt.Sprintf("%s/%s", curMemLimits.String(), quota.MemLimit),
+					MemRequest:    fmt.Sprintf("%s/%s", curMemRequests.String(), quota.MemRequest),
+				})
 				if er := r.Update(ctx, resourceQuota); er != nil {
 					return ctrl.Result{}, er
 				}
@@ -304,7 +304,7 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		} else {
 			// "No" means there is no quotas anymore, but the rl should be lefted
 			log.WithName("ResourceLimiter").Info(fmt.Sprintf("delete related resources according to %s resourcelimiter CR", rl.Name))
-			namespacedName = k8stypes.NamespacedName{Namespace: string(ns), Name: fmt.Sprintf("rl-%s-%d", string(ns), idx)}
+			namespacedName = k8stypes.NamespacedName{Namespace: quota.NamespaceName, Name: fmt.Sprintf("rl-quota-%s", quota.NamespaceName)}
 			if err := r.Get(ctx, namespacedName, resourceQuota); err != nil {
 				if apierrors.IsNotFound(err) {
 					continue
@@ -319,20 +319,18 @@ func (r *ResourceLimiterReconciler) reconcile(ctx context.Context, rl *rlv1beta1
 		}
 	}
 	if rl.Spec.Applied {
-		if err := r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
+		if err := r.updateStatus(ctx, rl, rlv1beta2.ResourceLimiterStatus{State: constants.Ready, Quotas: rlquotas}); err != nil {
 			return ctrl.Result{}, err
 		}
 		return ctrl.Result{}, nil
 	}
-	return ctrl.Result{}, r.updateStatus(ctx, rl, rlv1beta1.ResourceLimiterStatus{State: constants.Stopped, Quotas: map[string]rlv1beta1.ResourceLimiterQuotas{}})
+	return ctrl.Result{}, r.updateStatus(ctx, rl, rlv1beta2.ResourceLimiterStatus{State: constants.Stopped, Quotas: []rlv1beta2.ResourceLimiterQuota{}})
 }
 
-func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta1.ResourceLimiter, status rlv1beta1.ResourceLimiterStatus) error {
+func (r *ResourceLimiterReconciler) updateStatus(ctx context.Context, rl *rlv1beta2.ResourceLimiter, status rlv1beta2.ResourceLimiterStatus) error {
 	rl.Status.State = status.State
 	// We do a full-update
-	rl.Status.Quotas = make(map[string]rlv1beta1.ResourceLimiterQuotas, len(status.Quotas))
-	for k, v := range status.Quotas {
-		rl.Status.Quotas[k] = v
-	}
+	rl.Status.Quotas = []rlv1beta2.ResourceLimiterQuota{}
+	rl.Status.Quotas = append(rl.Status.Quotas, status.Quotas...)
 	return r.Status().Update(ctx, rl.DeepCopy())
 }

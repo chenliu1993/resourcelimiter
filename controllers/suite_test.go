@@ -33,7 +33,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/log/zap"
 
-	resourcesv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	resourcesv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	//+kubebuilder:scaffold:imports
 )
 
@@ -77,7 +77,7 @@ var _ = BeforeSuite(func() {
 	Expect(err).NotTo(HaveOccurred())
 	Expect(cfg).NotTo(BeNil())
 
-	err = resourcesv1beta1.AddToScheme(scheme.Scheme)
+	err = resourcesv1beta2.AddToScheme(scheme.Scheme)
 	Expect(err).NotTo(HaveOccurred())
 
 	//+kubebuilder:scaffold:scheme

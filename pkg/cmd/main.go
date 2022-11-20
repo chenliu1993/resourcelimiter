@@ -12,6 +12,7 @@ import (
 	"syscall"
 
 	rlv1beta1 "github.com/chenliu1993/resourcelimiter/api/v1beta1"
+	rlv1beta2 "github.com/chenliu1993/resourcelimiter/api/v1beta2"
 	admissionregistrationv1 "k8s.io/api/admissionregistration/v1"
 	v1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -44,6 +45,7 @@ func init() {
 	_ = admissionregistrationv1.AddToScheme(runtimeScheme)
 	_ = v1.AddToScheme(runtimeScheme)
 	_ = rlv1beta1.AddToScheme(runtimeScheme)
+	_ = rlv1beta2.AddToScheme(runtimeScheme)
 }
 
 func main() {

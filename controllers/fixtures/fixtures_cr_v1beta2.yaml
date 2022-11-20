@@ -1,0 +1,17 @@
+apiVersion: resources.resourcelimiter.io/v1beta2
+kind: ResourceLimiter
+metadata:
+  name: resourcelimiter-sample-fixtures
+spec:
+  targets:
+  - name: "default"
+    cpu_requests: "0.25"
+    mem_requests: "120Mi"
+    cpu_limits: "0.5"
+    mem_limits: "150Mi"
+  - name: "local-path-storage"
+    cpu_requests: "0.25"
+    mem_requests: "120Mi"
+    cpu_limits: "0.5"
+    mem_limits: "150Mi"
+  applied: true
