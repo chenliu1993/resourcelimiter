@@ -170,6 +170,7 @@ func updateResourceLimiterQuotasV1beta2(target, added []rlv1beta2.ResourceLimite
 func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.ResourceLimiter) ([]byte, error) {
 	var patch []patchOperation
 
+	rl.Spec.Quotas = []rlv1beta2.ResourceLimiterQuota{}
 	requiredQuotas := mutationRequiredV1beta2(rl)
 	// TODO: better  find
 	for k, v := range requiredQuotas {
@@ -177,7 +178,13 @@ func createPatchV1beta2(rl *rlv1beta2.ResourceLimiter, desired *rlv1beta2.Resour
 			if v && k == quota.NamespaceName {
 				patch = append(patch, updateResourceLimiterQuotasV1beta2(rl.Spec.Quotas, []rlv1beta2.ResourceLimiterQuota{
 					// Quotas.NamespaceName must exists, because desired is generated from the mutate-needed spec
-					quota,
+					{
+						NamespaceName: quota.NamespaceName,
+						CpuRequest:    "1",
+						CpuLimit:      "2",
+						MemRequest:    "150Mi",
+						MemLimit:      "200Mi",
+					},
 				})...)
 			}
 		}
@@ -292,10 +299,10 @@ func (whsvr *WebhookServer) mutate(ar *admissionv1.AdmissionReview) *admissionv1
 			// TODO maybe later I can try only change the problem field
 			desired.Spec.Quotas = append(desired.Spec.Quotas, rlv1beta2.ResourceLimiterQuota{
 				NamespaceName: item.NamespaceName,
-				CpuRequest:    "1",
-				CpuLimit:      "2",
-				MemRequest:    "150Mi",
-				MemLimit:      "200Mi",
+				// CpuRequest:    "1",
+				// CpuLimit:      "2",
+				// MemRequest:    "150Mi",
+				// MemLimit:      "200Mi",
 			})
 		}
 
