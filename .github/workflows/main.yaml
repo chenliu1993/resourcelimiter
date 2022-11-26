@@ -15,9 +15,6 @@ jobs:
    runs-on: [self-hosted, Linux, dev-01]
 
    steps:
-  #  - uses: actions/setup-go@v3
-  #    with:
-  #     go-version: '1.18'
    - name: Set up cluster
      run: kind delete cluster; kind create cluster --config /disk1/cliu/kind-config.yaml; sleep 60s;
 
@@ -32,6 +29,12 @@ jobs:
 
    - name: Test
      run: make test
-   
-   - name: Clean up Test Cluster
-     run: kind delete cluster
+
+  clean:
+    runs-on: [self-hosted, Linux, dev-01]
+    needs: [build]
+
+    if: ${{ always() }}
+    steps:
+    - name: Clean up Test Cluster
+      run: kind delete cluster

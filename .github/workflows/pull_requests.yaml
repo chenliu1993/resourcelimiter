@@ -28,9 +28,12 @@ jobs:
    - name: Build 
      run: make build
 
-   - name: Test
-     run: make test
+  clean:
+    runs-on: [self-hosted, Linux, dev-01]
+    needs: [build]
 
-   - name: Clean up Test Cluster
-     run: kind delete cluster
+    if: ${{ always() }}
+    steps:
+    - name: Clean up Test Cluster
+      run: kind delete cluster
     
