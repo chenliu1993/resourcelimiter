@@ -45,22 +45,22 @@ func convertV1beta1IntoV1beta2(oldObject *rlv1beta1.ResourceLimiter) (*rlv1beta2
 	return newObject, statusSucceed()
 }
 
-// func convertV1beta2IntoV1beta1(newObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
-// 	infoLogger.Printf("begin converting into v1beta1")
-// 	fromVersion := "resources.resourcelimiter.io/v1beta2"
-// 	toVersion := "resources.resourcelimiter.io/v1beta1"
+func convertV1beta2IntoV1beta1(newObject *rlv1beta2.ResourceLimiter) (*rlv1beta1.ResourceLimiter, metav1.Status) {
+	infoLogger.Printf("begin converting into v1beta1")
+	fromVersion := "resources.resourcelimiter.io/v1beta2"
+	toVersion := "resources.resourcelimiter.io/v1beta1"
 
-// 	if toVersion == fromVersion {
-// 		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
-// 	}
+	if toVersion == fromVersion {
+		return nil, statusErrorWithMessage("conversion from a version to itself should not call the webhook: %s", toVersion)
+	}
 
-// 	oldObject := &rlv1beta1.ResourceLimiter{}
+	oldObject := &rlv1beta1.ResourceLimiter{}
 
-// 	if err := oldObject.ConvertFrom(newObject); err != nil {
-// 		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
-// 	}
-// 	return oldObject, statusSucceed()
-// }
+	if err := oldObject.ConvertFrom(newObject); err != nil {
+		return nil, statusErrorWithMessage("failed to convert from %q into %q", fromVersion, toVersion)
+	}
+	return oldObject, statusSucceed()
+}
 
 func (whsvr *WebhookServer) serveConvert(w http.ResponseWriter, r *http.Request) {
 	var body []byte
@@ -194,11 +194,22 @@ func doConversion(convertRequest *v1beta1.ConversionRequest) *v1beta1.Conversion
 				return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
 			}
 
+			// This part is bound to how the v1beta1 is organized
+			specObject := unstructuredCR.Object["spec"].(map[string]interface{})
+			targets := []rlv1beta1.ResourceLimiterNamespace{}
+			for _, item := range specObject["targets"].([]interface{}) {
+				targets = append(targets, rlv1beta1.ResourceLimiterNamespace(item.(string)))
+			}
+			types := map[rlv1beta1.ResourceLimiterType]string{}
+			for k, v := range specObject["types"].(map[string]interface{}) {
+				types[rlv1beta1.ResourceLimiterType(k)] = v.(string)
+			}
+
 			cr := &rlv1beta1.ResourceLimiter{
 				Spec: rlv1beta1.ResourceLimiterSpec{
-					Targets: unstructuredCR.Object["targets"].([]rlv1beta1.ResourceLimiterNamespace),
-					Types:   unstructuredCR.Object["types"].(map[rlv1beta1.ResourceLimiterType]string),
-					Applied: unstructuredCR.Object["applied"].(bool),
+					Applied: specObject["applied"].(bool),
+					Targets: targets,
+					Types:   types,
 				},
 			}
 
@@ -213,32 +224,44 @@ func doConversion(convertRequest *v1beta1.ConversionRequest) *v1beta1.Conversion
 
 		}
 	case "resources.resourcelimiter.io/v1beta1":
-		// for _, obj := range convertRequest.Objects {
-		// 	unstructuredCR := &unstructured.Unstructured{}
-		// 	if err := unstructuredCR.UnmarshalJSON(obj.Raw); err != nil {
-		// 		klog.Error(err)
-		// 		return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
-		// 	}
+		for _, obj := range convertRequest.Objects {
+			unstructuredCR := &unstructured.Unstructured{}
+			if err := unstructuredCR.UnmarshalJSON(obj.Raw); err != nil {
+				klog.Error(err)
+				return conversionResponseFailureWithMessagef("failed to unmarshall object (%v) with error: %v", string(obj.Raw), err)
+			}
 
-		// 	cr := &rlv1beta2.ResourceLimiter{
-		// 		Spec: rlv1beta2.ResourceLimiterSpec{
-		// 			Quotas:  unstructuredCR.Object["quotas"].([]rlv1beta2.ResourceLimiterQuota),
-		// 			Applied: unstructuredCR.Object["applied"].(bool),
-		// 		},
-		// 	}
+			// This part is bound to how the v1beta2 is organized
+			specObject := unstructuredCR.Object["spec"].(map[string]interface{})
+			quotas := []rlv1beta2.ResourceLimiterQuota{}
+			for _, item := range specObject["targets"].([]interface{}) {
+				itemMap := item.(map[string]interface{})
+				quotas = append(quotas, rlv1beta2.ResourceLimiterQuota{
+					NamespaceName: itemMap["name"].(string),
+					CpuRequest:    itemMap["cpu_requests"].(string),
+					CpuLimit:      itemMap["cpu_limits"].(string),
+					MemRequest:    itemMap["mem_requests"].(string),
+					MemLimit:      itemMap["mem_limits"].(string),
+				})
+			}
 
-		// 	oldVer, status := convertV1beta2IntoV1beta1(cr)
-		// 	if status.Status != metav1.StatusSuccess {
-		// 		klog.Error(status.String())
-		// 		return &v1beta1.ConversionResponse{
-		// 			Result: status,
-		// 		}
-		// 	}
-		// 	convertedObjects = append(convertedObjects, runtime.RawExtension{Object: oldVer})
-		// }
+			cr := &rlv1beta2.ResourceLimiter{
+				Spec: rlv1beta2.ResourceLimiterSpec{
+					Quotas:  quotas,
+					Applied: specObject["applied"].(bool),
+				},
+			}
 
-		// Do not convert into v1beta1
-		warningLogger.Printf("do not convert v1beta2 into v1beta1")
+			oldVer, status := convertV1beta2IntoV1beta1(cr)
+			if status.Status != metav1.StatusSuccess {
+				klog.Error(status.String())
+				return &v1beta1.ConversionResponse{
+					Result: status,
+				}
+			}
+			convertedObjects = append(convertedObjects, runtime.RawExtension{Object: oldVer})
+		}
+
 	default:
 		return &v1beta1.ConversionResponse{
 			ConvertedObjects: convertedObjects,
