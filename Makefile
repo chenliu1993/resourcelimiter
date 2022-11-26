@@ -72,6 +72,13 @@ webhook-test: envtest ## Run mutate && validate tests
 	cd ./pkg/cmd/ && \
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v . -coverprofile cover.out
 
+.PHONY: conversion-test
+conversion-test: envtest ## Run mutate && validate tests
+	cd ./pkg/conversion/ && \
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v . -coverprofile cover.out
+
+
+
 ##@ Build
 
 .PHONY: build
