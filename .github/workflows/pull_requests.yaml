@@ -8,16 +8,10 @@ env:
   GO111MODULE: on
 
 jobs:
-  build:
+  unit-test:
    runs-on: [self-hosted, Linux, dev-01]
   
    steps:
-  #  - uses: actions/setup-go@v3
-  #    with:
-  #     go-version: '1.18'
-
-   - name: Set up cluster
-     run: kind delete cluster; kind create cluster --config /disk1/cliu/kind-config.yaml; sleep 60s;
 
    - uses: actions/checkout@v3
      name: Checkout Code
@@ -25,15 +19,8 @@ jobs:
         repository: chenliu1993/resourcelimiter
         ssh-key: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
         
-   - name: Build 
-     run: make build
 
-  clean:
-    runs-on: [self-hosted, Linux, dev-01]
-    needs: [build]
+   - name: unit tests
+     run: make unit-test 
 
-    if: ${{ always() }}
-    steps:
-    - name: Clean up Test Cluster
-      run: kind delete cluster
     
