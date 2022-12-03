@@ -59,23 +59,29 @@ vet: ## Run go vet against code.
 	go vet ./...
 
 .PHONY: test
-test: manifests generate fmt vet envtest ## Run tests.
+test: manifests generate fmt vet envtest ## Run all tests.
 	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v ./... -coverprofile cover.out
 
-.PHONY: controller-test
-controller-test:  manifests generate fmt vet envtest ## Run controller e2e tests.
+.PHONY: e2e-test
+e2e-test:   controller-e2e-test ## Run all e2e tests.
+
+.PHONY: unit-test
+unit-test: webhook-unit-test conversion-unit-test ## Run all unit tests
+
+.PHONY: controller-e2e-test
+controller-e2e-test:  manifests generate fmt vet envtest ## Run controller e2e tests.
 	cd ./controllers && \
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v . -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v ./... -coverprofile cover.out
 
-.PHONY: webhook-test
-webhook-test: envtest ## Run mutate && validate tests
+.PHONY: webhook-unit-test
+webhook-unit-test: envtest ## Run mutate && validate tests
 	cd ./pkg/cmd/ && \
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v . -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v ./... -coverprofile cover.out
 
-.PHONY: conversion-test
-conversion-test: envtest ## Run mutate && validate tests
+.PHONY: conversion-unit-test
+conversion-unit-test: envtest ## Run mutate && validate tests
 	cd ./pkg/conversion/ && \
-	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v . -coverprofile cover.out
+	KUBEBUILDER_ASSETS="$(shell $(ENVTEST) use $(ENVTEST_K8S_VERSION) -p path)"  ACK_GINKGO_DEPRECATIONS=1.16.5 go test -v ./... -coverprofile cover.out
 
 
 
