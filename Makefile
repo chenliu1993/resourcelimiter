@@ -8,6 +8,7 @@ GITCOMMIT ?= $(shell git rev-parse --short HEAD)
 IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.2-${GITCOMMIT}
 CHECKERIMG ?= www.cliufreever.com/library/resourcelimiter-checker:v0.0.2-${GITCOMMIT}
 CONVERTERIMG ?= www.cliufreever.com/library/resourcelimiter-converter:v0.0.2-${GITCOMMIT}
+HELM_REGISTRY ?= cliufreever
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
@@ -125,6 +126,21 @@ docker-converter-push: ## Push docker image with the manager.
 
 .PHONY: docker-all-push
 docker-all-push: docker-push docker-checker-push docker-converter-push ## push all components
+
+.PHONY: helm-all-push
+helm-all-push: helm-crd-push helm-conversion-push helm-controller-push ## helm push all charts
+
+.PHONY: helm-crd-push
+helm-crd-push: ## helm push crd helm
+	cd charts/resourcelimiter-crd && helm cm-push . ${HELM_REGISTRY}
+
+.PHONY: helm-conversion-push
+helm-conversion-push: ## push conversion webhook chart
+	cd charts/resourcelimiter-conversion && helm cm-push . ${HELM_REGISTRY}
+
+.PHONY: helm-controller-push
+helm-controller-push: ## push controller chart
+	cd charts/resourcelimiter && helm dependency update && helm cm-push . ${HELM_REGISTRY}
 
 ##@ Deployment
 
