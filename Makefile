@@ -5,9 +5,9 @@ ENVTEST_K8S_VERSION = 1.24.2
 GITCOMMIT ?= $(shell git rev-parse --short HEAD)
 # Image URL to use all building/pushing image targets
 # IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.1-$(GITCOMMIT)
-IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.2
-CHECKERIMG ?= www.cliufreever.com/library/resourcelimiter-checker:v0.0.2
-CONVERTERIMG ?= www.cliufreever.com/library/resourcelimiter-converter:v0.0.2
+IMG ?= www.cliufreever.com/library/resourcelimiter-controller:v0.0.2-${GITCOMMIT}
+CHECKERIMG ?= www.cliufreever.com/library/resourcelimiter-checker:v0.0.2-${GITCOMMIT}
+CONVERTERIMG ?= www.cliufreever.com/library/resourcelimiter-converter:v0.0.2-${GITCOMMIT}
 # Get the currently used golang install path (in GOPATH/bin, unless GOBIN is set)
 ifeq (,$(shell go env GOBIN))
 GOBIN=$(shell go env GOPATH)/bin
