@@ -29,15 +29,4 @@ jobs:
      run: make docker-all-push
   
    - name: Push helm
-     run: cd charts/resourcelimiter-crd && helm cm-push . cliufreever && cd ../resourcelimiter && \
-            helm dependency update && helm cm-push . cliufreever && cd ../resourcelimiter-conversion && \
-            helm cm-push . cliufreever
-
-  clean:
-    runs-on: [self-hosted, Linux, dev-01]
-    needs: [build]
-
-    if: ${{ always() }}
-    steps:
-    - name: Clean up Test Cluster
-      run: kind delete cluster
+     run: make helm-all-push
