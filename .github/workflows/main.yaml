@@ -6,6 +6,7 @@ on:
       - main
    schedule:
     - cron: "0 12 * * *"
+   workflow_dispatch:
 
 env:
   GO111MODULE: on
@@ -15,20 +16,22 @@ jobs:
    runs-on: [self-hosted, Linux, dev-01]
 
    steps:
-   - name: Set up cluster
-     run: kind delete cluster; kind create cluster --config /disk1/cliu/kind-config.yaml; sleep 60s;
-
    - uses: actions/checkout@v3
      name: Checkout Code
      with:
         repository: chenliu1993/resourcelimiter
         ssh-key: ${{ secrets.PERSONAL_ACCESS_TOKEN }}
 
-   - name: Build 
-     run: make build
+   - name: Build images
+     run: make docker-all-build
 
-   - name: Test
-     run: make test
+   - name: Push images
+     run: make docker-all-push
+  
+   - name: Push helm
+     run: cd charts/resourcelimiter-crd && helm cm-push . cliufreever && cd ../resourcelimiter && \
+            helm dependency update && helm cm-push . cliufreever && cd ../resourcelimiter-conversion && \
+            helm cm-push . cliufreever
 
   clean:
     runs-on: [self-hosted, Linux, dev-01]
